@@ -27,3 +27,11 @@ CREATE TABLE client_scope (
 );
 CREATE UNIQUE INDEX idx_client_scope_xref ON client_scope(client_uuid);
 CREATE UNIQUE INDEX idx_scope_client_xref ON client_scope(scope_uuid);
+CREATE TABLE refresh (
+    uuid CHAR(36) PRIMARY KEY,
+    refresh_token CHAR(36) NOT NULL,
+    client_uuid CHAR(36) NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    revoked BOOLEAN NOT NULL
+);
+CREATE UNIQUE INDEX idx_refresh_token ON refresh(refresh_token);
