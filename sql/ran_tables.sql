@@ -25,8 +25,8 @@ CREATE TABLE client_scope (
     CONSTRAINT fk_client_scope_xref_id FOREIGN KEY (client_uuid) REFERENCES client (uuid),
     CONSTRAINT fk_scope_client_xref_id FOREIGN KEY (scope_uuid) REFERENCES scope (uuid)
 );
-CREATE UNIQUE INDEX idx_client_scope_xref ON client_scope(client_uuid);
-CREATE UNIQUE INDEX idx_scope_client_xref ON client_scope(scope_uuid);
+CREATE INDEX idx_client_scope_xref ON client_scope(client_uuid);
+CREATE INDEX idx_scope_client_xref ON client_scope(scope_uuid);
 CREATE TABLE refresh (
     uuid CHAR(36) PRIMARY KEY,
     refresh_token CHAR(36) NOT NULL,
