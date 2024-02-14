@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"ran/s2s"
 
 	"github.com/tdeslauriers/carapace/connect"
 	"github.com/tdeslauriers/carapace/data"
@@ -83,8 +84,8 @@ func main() {
 	signer := jwt.JwtSignerService{PrivateKey: privateKey}
 
 	// set up service + handlers
-	loginService := session.NewS2SLoginService("ran", dao, &signer)
-	loginHander := session.NewS2sLoginHandler(loginService)
+	loginService := s2s.NewS2SLoginService("ran", dao, &signer)
+	loginHander := s2s.NewS2sLoginHandler(loginService)
 	refreshHandler := session.NewS2sRefreshHandler(loginService)
 
 	mux := http.NewServeMux()
