@@ -13,7 +13,6 @@ import (
 	"github.com/tdeslauriers/carapace/data"
 	"github.com/tdeslauriers/carapace/diagnostics"
 	"github.com/tdeslauriers/carapace/jwt"
-	"github.com/tdeslauriers/carapace/session"
 )
 
 const (
@@ -84,9 +83,9 @@ func main() {
 	signer := jwt.JwtSignerService{PrivateKey: privateKey}
 
 	// set up service + handlers
-	loginService := s2s.NewS2SLoginService("ran", dao, &signer)
-	loginHander := s2s.NewS2sLoginHandler(loginService)
-	refreshHandler := session.NewS2sRefreshHandler(loginService)
+	authService := s2s.NewS2sAuthService(dao, &signer)
+	loginHander := s2s.NewS2sLoginHandler(authService)
+	refreshHandler := s2s.NewS2sRefreshHandler(authService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", diagnostics.HealthCheckHandler)
