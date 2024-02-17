@@ -15,11 +15,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type S2sLoginCmd struct {
-	ClientId     string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
-}
-
 type MariaS2sAuthService struct {
 	Dao  data.SqlRepository
 	Mint jwt.JwtSigner

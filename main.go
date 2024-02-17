@@ -28,12 +28,16 @@ const (
 	EnvDbUsername string = "RAN_DATABASE_USERNAME"
 	EnvDbPassword string = "RAN_DATABASE_PASSWORD"
 
-	EnvS2sJwtSigningKey string = "RAN_SIGNING_KEY"
+	// sign s2s jwts
+	EnvJwtSigningKey string = "RAN_SIGNING_KEY"
+
+	// verifying s2s jwts
+	EnvS2sJwtVerifyKey string = "RAN_JWT_VERIFYING_KEY"
 )
 
 func main() {
 
-	// set up server
+	// set up server pki
 	serverPki := &connect.Pki{
 		CertFile: os.Getenv(EnvServerCert),
 		KeyFile:  os.Getenv(EnvServerKey),
@@ -71,7 +75,7 @@ func main() {
 	}
 
 	// set up signer
-	privPem, err := base64.StdEncoding.DecodeString(os.Getenv(EnvS2sJwtSigningKey))
+	privPem, err := base64.StdEncoding.DecodeString(os.Getenv(EnvJwtSigningKey))
 	if err != nil {
 		log.Fatalf("Could not decode (base64) signing key Env var: %v", err)
 	}

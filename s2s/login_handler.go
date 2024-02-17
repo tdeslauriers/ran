@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/data"
 	"github.com/tdeslauriers/carapace/session"
-	"github.com/tdeslauriers/carapace/validate"
 )
 
 // s2s login handler -> handles incoming login
@@ -31,20 +30,17 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var cmd S2sLoginCmd
+	var cmd session.S2sLoginCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// field input restrictions
-	if !validate.IsValidUuid(cmd.ClientId) {
-		http.Error(w, "invalid client credentials", http.StatusUnauthorized)
-	}
-
-	if err := validate.IsValidPassword(cmd.ClientSecret); err != nil {
-		http.Error(w, "invalid client credentials", http.StatusUnauthorized)
+	// input validation
+	if err := cmd.ValidateCmd(); err != nil {
+		http.Error(w, fmt.Sprintf("invalid client credentials: %s", err), http.StatusBadRequest)
+		return
 	}
 
 	// validate creds
