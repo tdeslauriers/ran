@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"ran/s2s"
+	"ran/scopes"
 
 	"github.com/tdeslauriers/carapace/connect"
 	"github.com/tdeslauriers/carapace/data"
@@ -85,16 +86,21 @@ func main() {
 		log.Fatalf("unable to parse x509 EC Private Key: %v", err)
 	}
 	signer := jwt.JwtSignerService{PrivateKey: privateKey}
+	verifier := jwt.JwtVerifierService{PublicKey: &privateKey.PublicKey}
 
 	// set up service + handlers
 	authService := s2s.NewS2sAuthService(dao, &signer)
 	loginHander := s2s.NewS2sLoginHandler(authService)
 	refreshHandler := s2s.NewS2sRefreshHandler(authService)
 
+	scopesService := scopes.NewAuthzScopesSerivce(dao)
+	scopesHandler := scopes.NewScopesHandler(scopesService, &verifier)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", diagnostics.HealthCheckHandler)
 	mux.HandleFunc("/login", loginHander.HandleS2sLogin)
 	mux.HandleFunc("/refresh", refreshHandler.HandleS2sRefresh)
+	mux.HandleFunc("/scopes", scopesHandler.GetActiveScopes)
 
 	// set up server
 	server := &connect.TlsServer{
