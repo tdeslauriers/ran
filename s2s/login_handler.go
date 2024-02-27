@@ -39,6 +39,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	// input validation
 	if err := cmd.ValidateCmd(); err != nil {
+		log.Print(err.Error())
 		http.Error(w, fmt.Sprintf("%s", err), http.StatusBadRequest)
 		return
 	}

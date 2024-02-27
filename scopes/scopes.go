@@ -12,7 +12,7 @@ import (
 )
 
 // service scopes required
-var allowed []string = []string{"r.ran:*"}
+var allowed []string = []string{"r:ran:*"}
 
 type ScopesService interface {
 	GetActiveScopes() ([]session.Scope, error)
@@ -61,13 +61,12 @@ func (h *ScopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) 
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
+	log.Print(svcToken)
 	if authorized, err := h.Verifier.IsAuthorized(allowed, svcToken); !authorized {
 		if err.Error() == "unauthorized" {
-			log.Print(err.Error())
 			http.Error(w, fmt.Sprintf("invalid service token: %s", err), http.StatusUnauthorized)
 			return
 		} else {
-			log.Print(err.Error())
 			http.Error(w, fmt.Sprintf("%s", err), http.StatusInternalServerError)
 			return
 		}

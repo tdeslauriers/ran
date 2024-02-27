@@ -75,7 +75,7 @@ func main() {
 		SqlDb: dbConnector,
 	}
 
-	// set up signer
+	// set up jwt signer
 	privPem, err := base64.StdEncoding.DecodeString(os.Getenv(EnvJwtSigningKey))
 	if err != nil {
 		log.Fatalf("Could not decode (base64) signing key Env var: %v", err)
@@ -86,7 +86,10 @@ func main() {
 		log.Fatalf("unable to parse x509 EC Private Key: %v", err)
 	}
 	signer := jwt.JwtSignerService{PrivateKey: privateKey}
-	verifier := jwt.JwtVerifierService{PublicKey: &privateKey.PublicKey}
+
+	// set up jwt verifier
+	publicKey := &privateKey.PublicKey
+	verifier := &jwt.JwtVerifierService{PublicKey: publicKey}
 
 	// set up service + handlers
 	authService := s2s.NewS2sAuthService(dao, &signer)
@@ -94,7 +97,7 @@ func main() {
 	refreshHandler := s2s.NewS2sRefreshHandler(authService)
 
 	scopesService := scopes.NewAuthzScopesSerivce(dao)
-	scopesHandler := scopes.NewScopesHandler(scopesService, &verifier)
+	scopesHandler := scopes.NewScopesHandler(scopesService, verifier)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", diagnostics.HealthCheckHandler)

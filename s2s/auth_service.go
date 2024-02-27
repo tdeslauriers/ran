@@ -103,7 +103,9 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject string) (*jwt.JwtToken, err
 	var builder strings.Builder
 	for _, v := range scopes {
 		builder.WriteString(v.Scope)
-		builder.WriteString(" ")
+		if len(scopes) > 1 {
+			builder.WriteString(" ")
+		}
 	}
 
 	claims := jwt.JwtClaims{
