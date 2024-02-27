@@ -66,6 +66,7 @@ func (h *ScopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, fmt.Sprintf("invalid service token: %s", err), http.StatusUnauthorized)
 			return
 		} else {
+			log.Printf("unable to validate/build service token: %v", err)
 			http.Error(w, fmt.Sprintf("%s", err), http.StatusInternalServerError)
 			return
 		}
