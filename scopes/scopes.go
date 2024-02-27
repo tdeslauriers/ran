@@ -61,7 +61,6 @@ func (h *ScopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) 
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
-	log.Print(svcToken)
 	if authorized, err := h.Verifier.IsAuthorized(allowed, svcToken); !authorized {
 		if err.Error() == "unauthorized" {
 			http.Error(w, fmt.Sprintf("invalid service token: %s", err), http.StatusUnauthorized)

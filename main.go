@@ -88,8 +88,7 @@ func main() {
 	signer := jwt.JwtSignerService{PrivateKey: privateKey}
 
 	// set up jwt verifier
-	publicKey := &privateKey.PublicKey
-	verifier := &jwt.JwtVerifierService{PublicKey: publicKey}
+	verifier := &jwt.JwtVerifierService{PublicKey: &privateKey.PublicKey}
 
 	// set up service + handlers
 	authService := s2s.NewS2sAuthService(dao, &signer)
