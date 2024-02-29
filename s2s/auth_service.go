@@ -34,14 +34,15 @@ func (s *MariaS2sAuthService) ValidateCredentials(clientId, clientSecret string)
 
 	if err := s.Dao.SelectRecord(qry, &s2sClient, clientId); err != nil {
 		log.Panicf("unable to retrieve s2s client record: %v", err)
-		return err
+		return errors.New("unable to retrieve s2s client record")
 	}
 
 	// password checked first to prevent account enumeration
 	secret := []byte(clientSecret)
 	hash := []byte(s2sClient.Password)
 	if err := bcrypt.CompareHashAndPassword(hash, secret); err != nil {
-		return fmt.Errorf("unable to validate password: %v", err)
+		log.Printf("unable to validate password: %v", err)
+		return errors.New("unable to validate password")
 	}
 
 	if !s2sClient.Enabled {
@@ -74,7 +75,8 @@ func (s *MariaS2sAuthService) GetUserScopes(uuid string) ([]session.Scope, error
 			LEFT JOIN client_scope cs ON s.uuid = cs.scope_uuid
 		WHERE cs.client_uuid = ?`
 	if err := s.Dao.SelectRecords(qry, &scopes, uuid); err != nil {
-		return scopes, fmt.Errorf("unable to retrieve scopes for client %s: %v", uuid, err)
+		log.Printf("unable to retrieve scopes for client %s: %v", uuid, err)
+		return scopes, fmt.Errorf("unable to retrieve scopes for client %s", uuid)
 	}
 
 	return scopes, nil
@@ -89,7 +91,8 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject string) (*jwt.JwtToken, err
 	// set up jwt claims fields
 	jti, err := uuid.NewRandom()
 	if err != nil {
-		log.Panicf("Unable to create jti uuid")
+		log.Printf("unable to create jti uuid: %v", err)
+		return nil, errors.New("failed to mint s2s token")
 	}
 
 	currentTime := time.Now().UTC()
@@ -101,9 +104,9 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject string) (*jwt.JwtToken, err
 
 	// create scopes string: scope values, space delimited
 	var builder strings.Builder
-	for _, v := range scopes {
+	for i, v := range scopes {
 		builder.WriteString(v.Scope)
-		if len(scopes) > 1 {
+		if len(scopes) > 1 && i+1 < len(scopes) {
 			builder.WriteString(" ")
 		}
 	}
@@ -123,7 +126,7 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject string) (*jwt.JwtToken, err
 
 	err = s.Mint.MintJwt(&jot)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to mint jwt: %v", err)
 	}
 
 	return &jot, err
@@ -144,14 +147,15 @@ func (s *MariaS2sAuthService) GetRefreshToken(refreshToken string) (*session.S2s
 		WHERE refresh_token = ?`
 	if err := s.Dao.SelectRecord(qry, &refresh, refreshToken); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("refresh token does not exist")
+			return nil, errors.New("refresh token does not exist")
 		}
-		return nil, fmt.Errorf("refresh token lookup failed: %v", err)
+		log.Printf("refresh token lookup failed: %v", err)
+		return nil, errors.New("refresh token lookup failed")
 	}
 
 	// check revoke status
 	if refresh.Revoked {
-		return nil, fmt.Errorf("refresh token has been revoked")
+		return nil, errors.New("refresh token has been revoked")
 	}
 
 	// validate refresh token not expired server-side
@@ -161,13 +165,13 @@ func (s *MariaS2sAuthService) GetRefreshToken(refreshToken string) (*session.S2s
 		go func(id string) {
 			qry := "DELETE FROM refresh WHERE uuid = ?"
 			if err := s.Dao.DeleteRecord(qry, id); err != nil {
-				log.Printf("unable to delete expired refresh token %s", id)
+				log.Printf("unable to delete expired refresh token %s: %v", id, err)
 			}
 
 			log.Printf("deleted expired refresh token id: %s", id)
 		}(refresh.Uuid)
 
-		return nil, fmt.Errorf("refresh token is expired")
+		return nil, errors.New("refresh token is expired")
 	}
 
 	return &refresh, nil
@@ -177,7 +181,8 @@ func (s *MariaS2sAuthService) PersistRefresh(r session.S2sRefresh) error {
 
 	qry := "INSERT INTO refresh (uuid, refresh_token, client_uuid, created_at, revoked) VALUES (?, ?, ?, ?, ?)"
 	if err := s.Dao.InsertRecord(qry, r); err != nil {
-		return fmt.Errorf("unable to save refresh token: %v", err)
+		log.Printf("unable to save refresh token: %v", err)
+		return errors.New("unable to save refresh token")
 	}
 	return nil
 }

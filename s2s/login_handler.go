@@ -8,9 +8,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tdeslauriers/carapace/connect"
 	"github.com/tdeslauriers/carapace/data"
 	"github.com/tdeslauriers/carapace/session"
 )
+
+const loginFailedMsg string = "login failed due to server error."
 
 // s2s login handler -> handles incoming login
 type S2sLoginHandler struct {
@@ -26,46 +29,77 @@ func NewS2sLoginHandler(service session.S2sAuthService) *S2sLoginHandler {
 func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
-		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		err := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "Only POST method is allowed",
+		}
+		err.SendJsonErr(w)
 		return
 	}
 
 	var cmd session.S2sLoginCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Printf("unable to decode json s2s login payload: %v", err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "Unable to decode json s2s login payload.",
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
 	// input validation
 	if err := cmd.ValidateCmd(); err != nil {
-		log.Print(err.Error())
-		http.Error(w, fmt.Sprintf("%s", err), http.StatusBadRequest)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    err.Error(),
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
 	// validate creds
 	if err := h.AuthService.ValidateCredentials(cmd.ClientId, cmd.ClientSecret); err != nil {
-		http.Error(w, fmt.Sprintf("invalid client credentials: %s", err), http.StatusUnauthorized)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusUnauthorized,
+			Message:    fmt.Sprintf("invalid client credentials: %s", err),
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
 	// create token
 	token, err := h.AuthService.MintAuthzToken(cmd.ClientId)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("unable to mint s2s token: %v", err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    loginFailedMsg,
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
 	// create refresh
 	refreshId, err := uuid.NewRandom()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("failed to create refresh token id uuid: %v", err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    loginFailedMsg,
+		}
+		e.SendJsonErr(w)
 		return
 	}
 	refreshToken, err := uuid.NewRandom()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("failed to create refresh token uuid: %v", err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    loginFailedMsg,
+		}
+		e.SendJsonErr(w)
 		return
 	}
 	refresh := session.S2sRefresh{
@@ -81,7 +115,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		err := h.AuthService.PersistRefresh(r)
 		if err != nil {
 			// only logging since refresh is a convenience
-			log.Print(err)
+			log.Printf("error persisting s2s refresh token: %v", err)
 		}
 	}(refresh)
 
@@ -95,7 +129,12 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}
 	authzJson, err := json.Marshal(authz)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("unable to marshal s2s login response body: %v", err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    loginFailedMsg,
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
