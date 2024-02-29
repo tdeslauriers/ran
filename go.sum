@@ -4,5 +4,7 @@ github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/tdeslauriers/carapace v0.0.32 h1:txYKgZReXrC/TMHS/UTZQjFk5OZWL/yK3KtYP/GMzXU=
 github.com/tdeslauriers/carapace v0.0.32/go.mod h1:VVDLf+4HRejMQ8lbJXAQ+tF85frpP7u3JM4gvt/Bmyw=
+github.com/tdeslauriers/carapace v0.0.33 h1:M8ErYG5vzDperQeMKibY0a9iHRX9o1ElxDgiI0nrvLs=
+github.com/tdeslauriers/carapace v0.0.33/go.mod h1:VVDLf+4HRejMQ8lbJXAQ+tF85frpP7u3JM4gvt/Bmyw=
 golang.org/x/crypto v0.20.0 h1:jmAMJJZXr5KiCw05dfYK9QnqaqKLYXijU23lsEdcQqg=
 golang.org/x/crypto v0.20.0/go.mod h1:Xwo95rrVNIoSMx9wa1JroENMToLWn3RNVrTBpLHgZPQ=

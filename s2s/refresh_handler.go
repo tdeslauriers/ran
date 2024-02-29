@@ -59,7 +59,6 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		token, err := h.AuthService.MintAuthzToken(refresh.ClientId)
 		if err != nil {
 			log.Printf("unable to mint new jwt for client id %v: %v", &refresh.ClientId, err)
-			http.Error(w, fmt.Sprintf("unable to mint new s2s token from refresh token: %v", err), http.StatusBadRequest)
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
 				Message:    "unable to mint new s2s token from refresh token",
@@ -76,13 +75,16 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			RefreshToken:   refresh.RefreshToken,
 			RefreshExpires: data.CustomTime{Time: refresh.CreatedAt.Add(1 * time.Hour)}, //  same expiry
 		}
-		authzJson, err := json.Marshal(authz)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(authzJson)
+		if err := json.NewEncoder(w).Encode(authz); err != nil {
+			log.Printf("unable to marshal/send s2s refresh response body: %v", err)
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "unable to send s2s refresh response body due to interal service error",
+			}
+			e.SendJsonErr(w)
+			return
+		}
 	}
 }

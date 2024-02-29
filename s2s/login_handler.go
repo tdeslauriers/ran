@@ -127,17 +127,15 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		RefreshToken:   refresh.RefreshToken,
 		RefreshExpires: data.CustomTime{Time: time.Unix(token.Claims.IssuedAt, 0).Add(30 * time.Minute)},
 	}
-	authzJson, err := json.Marshal(authz)
-	if err != nil {
-		log.Printf("unable to marshal s2s login response body: %v", err)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(authz); err != nil {
+		log.Printf("unable to marshal/send s2s login response body: %v", err)
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
-			Message:    loginFailedMsg,
+			Message:    "unable to send s2s login response body due to interal service error",
 		}
 		e.SendJsonErr(w)
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(authzJson)
 }
