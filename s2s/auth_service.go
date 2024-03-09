@@ -106,9 +106,10 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtT
 		return nil, errors.New("failed to mint s2s token")
 	}
 
-	currentTime := time.Now().UTC()
-
 	scopes, err := s.GetUserScopes(subject, service)
+	if len(scopes) < 1 {
+		return nil, fmt.Errorf("subject %s has not scopes for this %s", subject, service)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -121,6 +122,8 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtT
 			builder.WriteString(" ")
 		}
 	}
+
+	currentTime := time.Now().UTC()
 
 	claims := jwt.JwtClaims{
 		Jti:       jti.String(),
