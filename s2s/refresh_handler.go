@@ -2,7 +2,6 @@ package s2s
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -35,28 +34,39 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	var cmd session.RefreshCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
-		log.Printf("unable to decode refresh cmd request body: %v", err)
+		log.Printf("unable to decode s2s refresh cmd request body: %v", err)
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
-			Message:    "bad request: login request improperly formatted",
+			Message:    "s2s refresh request improperly formatted json",
 		}
 		e.SendJsonErr(w)
 		return
 	}
 
+	// validate request formatting
+	if err := cmd.ValidateCmd(); err != nil {
+		log.Printf("unable to validate refresh token formatt: %v", err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    err.Error(),
+		}
+		e.SendJsonErr(w)
+	}
+
 	// lookup refresh
 	refresh, err := h.AuthService.GetRefreshToken(cmd.RefreshToken)
 	if err != nil {
+		log.Printf("unable to get refresh token: %v", err)
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
-			Message:    fmt.Sprintf("invalid refresh token: %v", err),
+			Message:    "invalid refresh token",
 		}
 		e.SendJsonErr(w)
 	}
 
 	if refresh != nil {
 		// mint new token/s2s access token
-		token, err := h.AuthService.MintAuthzToken(refresh.ClientId)
+		token, err := h.AuthService.MintAuthzToken(refresh.ClientId, refresh.ServiceName)
 		if err != nil {
 			log.Printf("unable to mint new jwt for client id %v: %v", &refresh.ClientId, err)
 			e := connect.ErrorHttp{

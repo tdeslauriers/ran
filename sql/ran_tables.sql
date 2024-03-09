@@ -10,12 +10,14 @@ CREATE TABLE client (
 );
 CREATE TABLE scope (
     uuid CHAR(36) PRIMARY KEY,
+    service_name VARCHAR(32) NOT NULL,
     scope VARCHAR(64) NOT NULL,
-    name VARCHAR(32) NOT NULL,
+    scope_name VARCHAR(32) NOT NULL,
     description VARCHAR(64),
     created_at TIMESTAMP NOT NULL,
     active BOOLEAN NOT NULL
 );
+CREATE INDEX idx_sevice_name ON scope(service_name);
 CREATE UNIQUE INDEX idx_scope ON scope(scope);
 CREATE TABLE client_scope (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -29,9 +31,12 @@ CREATE INDEX idx_client_scope_xref ON client_scope(client_uuid);
 CREATE INDEX idx_scope_client_xref ON client_scope(scope_uuid);
 CREATE TABLE refresh (
     uuid CHAR(36) PRIMARY KEY,
+    refresh_index VARCHAR(128) NOT NULL,
+    service_name VARCHAR(32),
     refresh_token CHAR(36) NOT NULL,
     client_uuid CHAR(36) NOT NULL,
     created_at TIMESTAMP NOT NULL,
     revoked BOOLEAN NOT NULL
 );
-CREATE UNIQUE INDEX idx_refresh_token ON refresh(refresh_token);
+CREATE UNIQUE INDEX idx_refreshindex ON refresh(refresh_index);
+CREATE INDEX idx_refresh_sevice_name ON refresh(service_name);

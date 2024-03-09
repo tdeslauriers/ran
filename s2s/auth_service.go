@@ -15,15 +15,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	TokenDuration   time.Duration = time.Duration(5)
+	RefreshDuration time.Duration = time.Duration(30)
+)
+
 type MariaS2sAuthService struct {
-	Dao  data.SqlRepository
-	Mint jwt.JwtSigner
+	Dao     data.SqlRepository
+	Mint    jwt.JwtSigner
+	Indexer data.Indexer
+	Cryptor data.Cryptor
 }
 
-func NewS2sAuthService(sql data.SqlRepository, mint jwt.JwtSigner) *MariaS2sAuthService {
+func NewS2sAuthService(sql data.SqlRepository, mint jwt.JwtSigner, indexer data.Indexer, ciph data.Cryptor) *MariaS2sAuthService {
 	return &MariaS2sAuthService{
-		Dao:  sql,
-		Mint: mint,
+		Dao:     sql,
+		Mint:    mint,
+		Indexer: indexer,
+		Cryptor: ciph,
 	}
 }
 
@@ -60,12 +69,13 @@ func (s *MariaS2sAuthService) ValidateCredentials(clientId, clientSecret string)
 	return nil
 }
 
-func (s *MariaS2sAuthService) GetUserScopes(uuid string) ([]session.Scope, error) {
+func (s *MariaS2sAuthService) GetUserScopes(uuid, service string) ([]session.Scope, error) {
 
 	var scopes []session.Scope
 	qry := `
 		SELECT 
 			s.uuid,
+			s.service_name
 			s.scope,
 			s.name,
 			s.description,
@@ -73,8 +83,9 @@ func (s *MariaS2sAuthService) GetUserScopes(uuid string) ([]session.Scope, error
 			s.active
 		FROM scope s 
 			LEFT JOIN client_scope cs ON s.uuid = cs.scope_uuid
-		WHERE cs.client_uuid = ?`
-	if err := s.Dao.SelectRecords(qry, &scopes, uuid); err != nil {
+		WHERE cs.client_uuid = ?
+			AND s.service_name = ?`
+	if err := s.Dao.SelectRecords(qry, &scopes, uuid, service); err != nil {
 		log.Printf("unable to retrieve scopes for client %s: %v", uuid, err)
 		return scopes, fmt.Errorf("unable to retrieve scopes for client %s", uuid)
 	}
@@ -83,7 +94,7 @@ func (s *MariaS2sAuthService) GetUserScopes(uuid string) ([]session.Scope, error
 }
 
 // assumes credentials already validated
-func (s *MariaS2sAuthService) MintAuthzToken(subject string) (*jwt.JwtToken, error) {
+func (s *MariaS2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtToken, error) {
 
 	// jwt header
 	header := jwt.JwtHeader{Alg: jwt.ES512, Typ: jwt.TokenType}
@@ -97,7 +108,7 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject string) (*jwt.JwtToken, err
 
 	currentTime := time.Now().UTC()
 
-	scopes, err := s.GetUserScopes(subject)
+	scopes, err := s.GetUserScopes(subject, service)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +129,7 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject string) (*jwt.JwtToken, err
 		Audience:  session.BuildAudiences(scopes),
 		IssuedAt:  currentTime.Unix(),
 		NotBefore: currentTime.Unix(),
-		Expires:   currentTime.Add(10 * time.Minute).Unix(),
+		Expires:   currentTime.Add(TokenDuration * time.Minute).Unix(),
 		Scopes:    builder.String(),
 	}
 
@@ -132,34 +143,43 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject string) (*jwt.JwtToken, err
 	return &jot, err
 }
 
+// finds by regenerating blind index
+// decrypts refresh token for use
 func (s *MariaS2sAuthService) GetRefreshToken(refreshToken string) (*session.S2sRefresh, error) {
+
+	// re-create blind index for lookup.
+	index, err := s.Indexer.ObtainBlindIndex(refreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create blind index value for refresh token lookup: %v", err)
+	}
 
 	// look up refresh
 	var refresh session.S2sRefresh
 	qry := `
 		SELECT 
 			uuid, 
+			refresh_index,
+			service_name,
 			refresh_token, 
 			client_uuid, 
 			created_at, 
 			revoked 
 		FROM refresh
-		WHERE refresh_token = ?`
-	if err := s.Dao.SelectRecord(qry, &refresh, refreshToken); err != nil {
+		WHERE refresh_index = ?`
+	if err := s.Dao.SelectRecord(qry, &refresh, index); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.New("refresh token does not exist")
 		}
-		log.Printf("refresh token lookup failed: %v", err)
-		return nil, errors.New("refresh token lookup failed")
+		return nil, fmt.Errorf("refresh token lookup failed: %v", err)
 	}
 
-	// check revoke status
+	// check revoked status
 	if refresh.Revoked {
 		return nil, errors.New("refresh token has been revoked")
 	}
 
 	// validate refresh token not expired server-side
-	if refresh.CreatedAt.Time.Add(30 * time.Minute).Before(time.Now().UTC()) {
+	if refresh.CreatedAt.Time.Add(RefreshDuration * time.Minute).Before(time.Now().UTC()) {
 
 		// opportunistically delete expired refresh tokens
 		go func(id string) {
@@ -174,12 +194,42 @@ func (s *MariaS2sAuthService) GetRefreshToken(refreshToken string) (*session.S2s
 		return nil, errors.New("refresh token is expired")
 	}
 
+	// decrypt refresh token for use
+	decrypted, err := s.Cryptor.DecyptServiceData(refresh.RefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decrypt refresh token with uuid %s: %v", refresh.Uuid, err)
+	}
+	refresh.RefreshToken = decrypted
+
 	return &refresh, nil
 }
 
+// creates primary key and blind index
+// encrypts refresh token
 func (s *MariaS2sAuthService) PersistRefresh(r session.S2sRefresh) error {
 
-	qry := "INSERT INTO refresh (uuid, refresh_token, client_uuid, created_at, revoked) VALUES (?, ?, ?, ?, ?)"
+	// create primary key uuid for db record
+	refreshId, err := uuid.NewRandom()
+	if err != nil {
+		return fmt.Errorf("failed to create refresh token db record primary key/uuid: %v", err)
+	}
+	r.Uuid = string(refreshId.String())
+
+	// create blind index for db record
+	index, err := s.Indexer.ObtainBlindIndex(r.RefreshToken)
+	if err != nil {
+		return fmt.Errorf("failed to obtain blind index from refresh token: %v", err)
+	}
+	r.RefreshIndex = index
+
+	// encrypt refresh token for db reocrd
+	encrypted, err := s.Cryptor.EncyptServiceData(r.RefreshToken)
+	if err != nil {
+		return fmt.Errorf("unable to encrypt refresh token for database entry")
+	}
+	r.RefreshToken = encrypted
+
+	qry := "INSERT INTO refresh (uuid, refresh_index, service_name, refresh_token, client_uuid, created_at, revoked) VALUES (?, ?, ?, ?, ?)"
 	if err := s.Dao.InsertRecord(qry, r); err != nil {
 		log.Printf("unable to save refresh token: %v", err)
 		return errors.New("unable to save refresh token")

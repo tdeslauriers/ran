@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
+	"github.com/tdeslauriers/carapace/connect"
 	"github.com/tdeslauriers/carapace/data"
 	"github.com/tdeslauriers/carapace/jwt"
 	"github.com/tdeslauriers/carapace/session"
@@ -62,12 +64,19 @@ func (h *ScopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
 	if authorized, err := h.Verifier.IsAuthorized(allowed, svcToken); !authorized {
-		if err.Error() == "unauthorized" {
-			http.Error(w, fmt.Sprintf("invalid service token: %s", err), http.StatusUnauthorized)
+		if strings.Contains(err.Error(), "unauthorized") {
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusUnauthorized,
+				Message:    err.Error(),
+			}
+			e.SendJsonErr(w)
 			return
 		} else {
-			log.Printf("unable to validate/build service token: %v", err)
-			http.Error(w, fmt.Sprintf("%s", err), http.StatusInternalServerError)
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusInternalServerError,
+				Message:    fmt.Sprintf("unable to validate/build service token: %v", err),
+			}
+			e.SendJsonErr(w)
 			return
 		}
 	}

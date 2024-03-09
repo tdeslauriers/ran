@@ -51,6 +51,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	// input validation
 	if err := cmd.ValidateCmd(); err != nil {
+		log.Printf("unable to validate login cmd format: %v", err)
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    err.Error(),
@@ -70,7 +71,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}
 
 	// create token
-	token, err := h.AuthService.MintAuthzToken(cmd.ClientId)
+	token, err := h.AuthService.MintAuthzToken(cmd.ClientId, cmd.ServiceName)
 	if err != nil {
 		log.Printf("unable to mint s2s token: %v", err)
 		e := connect.ErrorHttp{
@@ -82,19 +83,9 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}
 
 	// create refresh
-	refreshId, err := uuid.NewRandom()
-	if err != nil {
-		log.Printf("failed to create refresh token id uuid: %v", err)
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusInternalServerError,
-			Message:    loginFailedMsg,
-		}
-		e.SendJsonErr(w)
-		return
-	}
 	refreshToken, err := uuid.NewRandom()
 	if err != nil {
-		log.Printf("failed to create refresh token uuid: %v", err)
+		log.Printf("failed to create refresh token: %v", err)
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    loginFailedMsg,
@@ -103,7 +94,9 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	refresh := session.S2sRefresh{
-		Uuid:         refreshId.String(),
+		// primary key uuid created by PersistRefresh
+		// index created by PersistRefresh
+		ServiceName:  cmd.ServiceName,
 		RefreshToken: refreshToken.String(),
 		ClientId:     cmd.ClientId,
 		CreatedAt:    data.CustomTime{Time: time.Unix(token.Claims.IssuedAt, 0)},
@@ -112,7 +105,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	// don't wait to return jwt
 	go func(r session.S2sRefresh) {
-		err := h.AuthService.PersistRefresh(r)
+		err := h.AuthService.PersistRefresh(r) // encrypts refresh token
 		if err != nil {
 			// only logging since refresh is a convenience
 			log.Printf("error persisting s2s refresh token: %v", err)

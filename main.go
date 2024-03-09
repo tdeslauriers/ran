@@ -17,6 +17,9 @@ import (
 )
 
 const (
+	// app name
+	AppName string = "ran"
+
 	EnvCaCert       string = "RAN_CA_CERT"
 	EnvServerCert   string = "RAN_SERVER_CERT"
 	EnvServerKey    string = "RAN_SERVER_KEY"
@@ -24,10 +27,13 @@ const (
 	EnvDbClientKey  string = "RAN_DB_CLIENT_KEY"
 
 	// db config
-	EnvDbUrl      string = "RAN_DATABASE_URL"
-	EnvDbName     string = "RAN_DATABASE_NAME"
-	EnvDbUsername string = "RAN_DATABASE_USERNAME"
-	EnvDbPassword string = "RAN_DATABASE_PASSWORD"
+	EnvDbUrl       string = "RAN_DATABASE_URL"
+	EnvDbName      string = "RAN_DATABASE_NAME"
+	EnvDbUsername  string = "RAN_DATABASE_USERNAME"
+	EnvDbPassword  string = "RAN_DATABASE_PASSWORD"
+	EnvDbIndexHmac string = "RAN_DATABASE_INDEX_HMAC"
+
+	EnvFieldsKey string = "RAN_FIELD_LEVEL_AES_GCM_KEY"
 
 	// sign s2s jwts
 	EnvJwtSigningKey string = "RAN_SIGNING_KEY"
@@ -75,6 +81,20 @@ func main() {
 		SqlDb: dbConnector,
 	}
 
+	// set up indexer
+	hmacSecret, err := base64.StdEncoding.DecodeString(os.Getenv(EnvDbIndexHmac))
+	if err != nil {
+		log.Fatalf("unable to decode hmac key Env var: %v", err)
+	}
+	indexer := data.NewHmacIndexer(hmacSecret)
+
+	// set up field level encryption
+	aes, err := base64.StdEncoding.DecodeString(os.Getenv(EnvFieldsKey))
+	if err != nil {
+		log.Panicf("unable to decode field level encryption key Env var: %v", err)
+	}
+	cryptor := data.NewServiceAesGcmKey(aes)
+
 	// set up jwt signer
 	privPem, err := base64.StdEncoding.DecodeString(os.Getenv(EnvJwtSigningKey))
 	if err != nil {
@@ -88,10 +108,10 @@ func main() {
 	signer := jwt.JwtSignerService{PrivateKey: privateKey}
 
 	// set up jwt verifier
-	verifier := &jwt.JwtVerifierService{PublicKey: &privateKey.PublicKey}
+	verifier := jwt.NewJwtVerifierService(AppName, &privateKey.PublicKey)
 
 	// set up service + handlers
-	authService := s2s.NewS2sAuthService(dao, &signer)
+	authService := s2s.NewS2sAuthService(dao, &signer, indexer, cryptor)
 	loginHander := s2s.NewS2sLoginHandler(authService)
 	refreshHandler := s2s.NewS2sRefreshHandler(authService)
 
