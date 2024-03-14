@@ -54,6 +54,7 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	}
 
 	// lookup refresh
+	// receiver function decrypts refresh token
 	refresh, err := h.AuthService.GetRefreshToken(cmd.RefreshToken)
 	if err != nil {
 		log.Printf("unable to get refresh token: %v", err)
@@ -64,11 +65,22 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		e.SendJsonErr(w)
 	}
 
+	// check refresh is for service requested
+	// this check secondary, but may indicate malicous request
+	if refresh != nil && refresh.ServiceName != cmd.ServiceName {
+		log.Printf("refresh id %s - refresh token requested for incorrect service: requested: %s, refresh token: %s", refresh.Uuid, cmd.ServiceName, refresh.ServiceName)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusUnauthorized,
+			Message:    "incorrect service name provided",
+		}
+		e.SendJsonErr(w)
+	}
+
 	if refresh != nil {
 		// mint new token/s2s access token
 		token, err := h.AuthService.MintAuthzToken(refresh.ClientId, refresh.ServiceName)
 		if err != nil {
-			log.Printf("unable to mint new jwt for client id %v: %v", &refresh.ClientId, err)
+			log.Printf("unable to mint new jwt for client id %s: %v", refresh.ClientId, err)
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
 				Message:    "unable to mint new s2s token from refresh token",
@@ -80,10 +92,11 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		// respond with authorization data
 		authz := &session.S2sAuthorization{
 			Jti:            token.Claims.Jti,
+			ServiceName:    cmd.ServiceName,
 			ServiceToken:   token.Token,
 			TokenExpires:   data.CustomTime{Time: time.Unix(token.Claims.Expires, 0)},
 			RefreshToken:   refresh.RefreshToken,
-			RefreshExpires: data.CustomTime{Time: refresh.CreatedAt.Add(1 * time.Hour)}, //  same expiry
+			RefreshExpires: data.CustomTime{Time: refresh.CreatedAt.Add(RefreshDuration * time.Minute)}, //  same expiry
 		}
 
 		w.Header().Set("Content-Type", "application/json")

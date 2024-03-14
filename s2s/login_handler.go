@@ -115,10 +115,11 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	// respond with authorization data
 	authz := session.S2sAuthorization{
 		Jti:            token.Claims.Jti,
+		ServiceName:    cmd.ServiceName,
 		ServiceToken:   token.Token,
 		TokenExpires:   data.CustomTime{Time: time.Unix(token.Claims.Expires, 0)},
 		RefreshToken:   refresh.RefreshToken,
-		RefreshExpires: data.CustomTime{Time: time.Unix(token.Claims.IssuedAt, 0).Add(30 * time.Minute)},
+		RefreshExpires: data.CustomTime{Time: time.Unix(token.Claims.IssuedAt, 0).Add(RefreshDuration * time.Minute)},
 	}
 
 	w.Header().Set("Content-Type", "application/json")

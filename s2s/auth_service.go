@@ -39,8 +39,18 @@ func NewS2sAuthService(sql data.SqlRepository, mint jwt.JwtSigner, indexer data.
 func (s *MariaS2sAuthService) ValidateCredentials(clientId, clientSecret string) error {
 
 	var s2sClient session.S2sClientData
-	qry := "SELECT uuid, password, name, owner, created_at, enabled, account_expired, account_locked FROM client WHERE uuid = ?"
-
+	qry := `
+		SELECT 
+			uuid, 
+			password, 
+			name, 
+			owner, 
+			created_at, 
+			enabled, 
+			account_expired, 
+			account_locked 
+		FROM client 
+		WHERE uuid = ?`
 	if err := s.Dao.SelectRecord(qry, &s2sClient, clientId); err != nil {
 		log.Panicf("unable to retrieve s2s client record: %v", err)
 		return errors.New("unable to retrieve s2s client record")
@@ -75,7 +85,7 @@ func (s *MariaS2sAuthService) GetUserScopes(uuid, service string) ([]session.Sco
 	qry := `
 		SELECT 
 			s.uuid,
-			s.service_name
+			s.service_name,
 			s.scope,
 			s.name,
 			s.description,
@@ -123,7 +133,7 @@ func (s *MariaS2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtT
 		}
 	}
 
-	currentTime := time.Now().UTC()
+	currentTime := time.Now()
 
 	claims := jwt.JwtClaims{
 		Jti:       jti.String(),
@@ -184,7 +194,7 @@ func (s *MariaS2sAuthService) GetRefreshToken(refreshToken string) (*session.S2s
 	// validate refresh token not expired server-side
 	if refresh.CreatedAt.Time.Add(RefreshDuration * time.Minute).Before(time.Now().UTC()) {
 
-		// opportunistically delete expired refresh tokens
+		// opportunistically delete expired refresh token
 		go func(id string) {
 			qry := "DELETE FROM refresh WHERE uuid = ?"
 			if err := s.Dao.DeleteRecord(qry, id); err != nil {
@@ -232,7 +242,7 @@ func (s *MariaS2sAuthService) PersistRefresh(r session.S2sRefresh) error {
 	}
 	r.RefreshToken = encrypted
 
-	qry := "INSERT INTO refresh (uuid, refresh_index, service_name, refresh_token, client_uuid, created_at, revoked) VALUES (?, ?, ?, ?, ?)"
+	qry := "INSERT INTO refresh (uuid, refresh_index, service_name, refresh_token, client_uuid, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, ?)"
 	if err := s.Dao.InsertRecord(qry, r); err != nil {
 		log.Printf("unable to save refresh token: %v", err)
 		return errors.New("unable to save refresh token")

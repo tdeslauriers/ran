@@ -33,7 +33,17 @@ func NewAuthzScopesSerivce(sql data.SqlRepository) *AuthzScopesService {
 func (a *AuthzScopesService) GetActiveScopes() ([]session.Scope, error) {
 
 	var scopes []session.Scope
-	query := "SELECT uuid, scope, name, description, created_at, active FROM scope WHERE active = true"
+	query := `
+			SELECT 
+				uuid, 
+				service_name, 
+				scope, 
+				name, 
+				description, 
+				created_at, 
+				active 
+			FROM scope 
+			WHERE active = true`
 	err := a.Dao.SelectRecords(query, &scopes)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get scopes records from db: %v", err)
