@@ -1,4 +1,4 @@
-package s2s
+package authentication
 
 import (
 	"encoding/json"
@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/tdeslauriers/carapace/connect"
-	"github.com/tdeslauriers/carapace/data"
-	"github.com/tdeslauriers/carapace/session"
+	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/carapace/pkg/session"
 )
 
 type S2sRefreshHandler struct {

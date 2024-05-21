@@ -1,4 +1,4 @@
-package s2s
+package authentication
 
 import (
 	"encoding/json"
@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tdeslauriers/carapace/connect"
-	"github.com/tdeslauriers/carapace/data"
-	"github.com/tdeslauriers/carapace/session"
+	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/carapace/pkg/session"
 )
 
 const loginFailedMsg string = "login failed due to server error."

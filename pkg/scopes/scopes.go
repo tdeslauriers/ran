@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tdeslauriers/carapace/connect"
-	"github.com/tdeslauriers/carapace/data"
-	"github.com/tdeslauriers/carapace/jwt"
-	"github.com/tdeslauriers/carapace/session"
+	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/carapace/pkg/jwt"
+	"github.com/tdeslauriers/carapace/pkg/session"
 )
 
 // service scopes required
@@ -20,17 +20,19 @@ type ScopesService interface {
 	GetActiveScopes() ([]session.Scope, error)
 }
 
-type AuthzScopesService struct {
-	Dao data.SqlRepository
-}
-
-func NewAuthzScopesSerivce(sql data.SqlRepository) *AuthzScopesService {
-	return &AuthzScopesService{
-		Dao: sql,
+func NewScopesSerivce(sql data.SqlRepository) ScopesService {
+	return &scopesService{
+		sql: sql,
 	}
 }
 
-func (a *AuthzScopesService) GetActiveScopes() ([]session.Scope, error) {
+var _ ScopesService = (*scopesService)(nil)
+
+type scopesService struct {
+	sql data.SqlRepository
+}
+
+func (a *scopesService) GetActiveScopes() ([]session.Scope, error) {
 
 	var scopes []session.Scope
 	query := `
@@ -44,7 +46,7 @@ func (a *AuthzScopesService) GetActiveScopes() ([]session.Scope, error) {
 				active 
 			FROM scope 
 			WHERE active = true`
-	err := a.Dao.SelectRecords(query, &scopes)
+	err := a.sql.SelectRecords(query, &scopes)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get scopes records from db: %v", err)
 	}
