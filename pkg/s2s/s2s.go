@@ -19,12 +19,12 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/session"
 )
 
-type S2sAuthn interface {
+type S2sAuthentication interface {
 	Run() error
 	CloseDb() error
 }
 
-func New(config config.Config) (S2sAuthn, error) {
+func New(config config.Config) (S2sAuthentication, error) {
 
 	// pki for s2s
 	// server
@@ -105,7 +105,7 @@ func New(config config.Config) (S2sAuthn, error) {
 	// scopes service
 	scopesService := scopes.NewScopesSerivce(repository)
 
-	return &s2sAuthn{
+	return &s2sAuthentication{
 		congig:        config,
 		serverTls:     serverTlsConfig,
 		repository:    repository,
@@ -116,9 +116,9 @@ func New(config config.Config) (S2sAuthn, error) {
 
 }
 
-var _ S2sAuthn = (*s2sAuthn)(nil)
+var _ S2sAuthentication = (*s2sAuthentication)(nil)
 
-type s2sAuthn struct {
+type s2sAuthentication struct {
 	congig        config.Config
 	serverTls     *tls.Config
 	repository    data.SqlRepository
@@ -127,14 +127,14 @@ type s2sAuthn struct {
 	scopesService scopes.ScopesService
 }
 
-func (s2s s2sAuthn) CloseDb() error {
+func (s2s s2sAuthentication) CloseDb() error {
 	if err := s2s.repository.Close(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s2s *s2sAuthn) Run() error {
+func (s2s *s2sAuthentication) Run() error {
 
 	loginHander := authentication.NewS2sLoginHandler(s2s.authService)
 	refreshHandler := authentication.NewS2sRefreshHandler(s2s.authService)

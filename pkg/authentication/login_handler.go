@@ -3,8 +3,9 @@ package authentication
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"ran/internal/util"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,18 +16,27 @@ import (
 
 const loginFailedMsg string = "login failed due to server error."
 
-// s2s login handler -> handles incoming login
-type S2sLoginHandler struct {
-	AuthService session.S2sAuthService
+type LoginHandler interface {
+	HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 }
 
-func NewS2sLoginHandler(service session.S2sAuthService) *S2sLoginHandler {
-	return &S2sLoginHandler{
-		AuthService: service,
+func NewS2sLoginHandler(service session.S2sAuthService) LoginHandler {
+	return &s2sLoginHandler{
+		authService: service,
+
+		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentLogin)),
 	}
 }
 
-func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request) {
+var _ LoginHandler = (*s2sLoginHandler)(nil)
+
+type s2sLoginHandler struct {
+	authService session.S2sAuthService
+
+	logger *slog.Logger
+}
+
+func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
 		err := connect.ErrorHttp{
@@ -40,7 +50,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	var cmd session.S2sLoginCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
-		log.Printf("unable to decode json s2s login payload: %v", err)
+		h.logger.Error("unable to decode json s2s login payload: %v", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "Unable to decode json s2s login payload.",
@@ -51,7 +61,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	// input validation
 	if err := cmd.ValidateCmd(); err != nil {
-		log.Printf("unable to validate login cmd format: %v", err)
+		h.logger.Error("unable to validate login cmd format: %v", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    err.Error(),
@@ -61,7 +71,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}
 
 	// validate creds
-	if err := h.AuthService.ValidateCredentials(cmd.ClientId, cmd.ClientSecret); err != nil {
+	if err := h.authService.ValidateCredentials(cmd.ClientId, cmd.ClientSecret); err != nil {
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
 			Message:    fmt.Sprintf("invalid client credentials: %s", err),
@@ -71,9 +81,9 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}
 
 	// create token
-	token, err := h.AuthService.MintAuthzToken(cmd.ClientId, cmd.ServiceName)
+	token, err := h.authService.MintAuthzToken(cmd.ClientId, cmd.ServiceName)
 	if err != nil {
-		log.Printf("unable to mint s2s token: %v", err)
+		h.logger.Error("unable to mint s2s token: %v", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    loginFailedMsg,
@@ -85,7 +95,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	// create refresh
 	refreshToken, err := uuid.NewRandom()
 	if err != nil {
-		log.Printf("failed to create refresh token: %v", err)
+		h.logger.Error("failed to create refresh token: %v", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    loginFailedMsg,
@@ -105,10 +115,10 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	// don't wait to return jwt
 	go func(r session.S2sRefresh) {
-		err := h.AuthService.PersistRefresh(r) // encrypts refresh token
+		err := h.authService.PersistRefresh(r) // encrypts refresh token
 		if err != nil {
 			// only logging since refresh is a convenience
-			log.Printf("error persisting s2s refresh token: %v", err)
+			h.logger.Error("error persisting s2s refresh token: %v", "err", err.Error())
 		}
 	}(refresh)
 
@@ -124,7 +134,7 @@ func (h *S2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(authz); err != nil {
-		log.Printf("unable to marshal/send s2s login response body: %v", err)
+		h.logger.Error("unable to marshal/send s2s login response body: %v", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "unable to send s2s login response body due to interal service error",

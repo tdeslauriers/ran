@@ -4,7 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
+	"ran/internal/util"
 	"strings"
 	"time"
 
@@ -27,6 +28,8 @@ func NewS2sAuthService(sql data.SqlRepository, mint jwt.JwtSigner, indexer data.
 		mint:    mint,
 		indexer: indexer,
 		cryptor: ciph,
+
+		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentAuthn)),
 	}
 }
 
@@ -37,6 +40,8 @@ type s2sAuthService struct {
 	mint    jwt.JwtSigner
 	indexer data.Indexer
 	cryptor data.Cryptor
+
+	logger *slog.Logger
 }
 
 func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) error {
@@ -55,7 +60,7 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 		FROM client 
 		WHERE uuid = ?`
 	if err := s.sql.SelectRecord(qry, &s2sClient, clientId); err != nil {
-		log.Panicf("unable to retrieve s2s client record: %v", err)
+		s.logger.Error("unable to retrieve s2s client record: %v", "err", err.Error())
 		return errors.New("unable to retrieve s2s client record")
 	}
 
@@ -63,7 +68,7 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 	secret := []byte(clientSecret)
 	hash := []byte(s2sClient.Password)
 	if err := bcrypt.CompareHashAndPassword(hash, secret); err != nil {
-		log.Printf("unable to validate password: %v", err)
+		s.logger.Error("unable to validate password: %v", "err", err.Error())
 		return errors.New("unable to validate password")
 	}
 
@@ -99,7 +104,7 @@ func (s *s2sAuthService) GetUserScopes(uuid, service string) ([]session.Scope, e
 		WHERE cs.client_uuid = ?
 			AND s.service_name = ?`
 	if err := s.sql.SelectRecords(qry, &scopes, uuid, service); err != nil {
-		log.Printf("unable to retrieve scopes for client %s: %v", uuid, err)
+		s.logger.Error(fmt.Sprintf("unable to retrieve scopes for client %s", uuid), "err", err.Error())
 		return scopes, fmt.Errorf("unable to retrieve scopes for client %s", uuid)
 	}
 
@@ -115,7 +120,7 @@ func (s *s2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtToken,
 	// set up jwt claims fields
 	jti, err := uuid.NewRandom()
 	if err != nil {
-		log.Printf("unable to create jti uuid: %v", err)
+		s.logger.Error("unable to create jti uuid", "err", err.Error())
 		return nil, errors.New("failed to mint s2s token")
 	}
 
@@ -201,10 +206,10 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*session.S2sRefre
 		go func(id string) {
 			qry := "DELETE FROM refresh WHERE uuid = ?"
 			if err := s.sql.DeleteRecord(qry, id); err != nil {
-				log.Printf("unable to delete expired refresh token %s: %v", id, err)
+				s.logger.Error(fmt.Sprintf("unable to delete expired refresh token %s", id), "err", err.Error())
 			}
 
-			log.Printf("deleted expired refresh token id: %s", id)
+			s.logger.Info(fmt.Sprintf("deleted expired refresh token id: %s", id))
 		}(refresh.Uuid)
 
 		return nil, errors.New("refresh token is expired")
@@ -247,7 +252,7 @@ func (s *s2sAuthService) PersistRefresh(r session.S2sRefresh) error {
 
 	qry := "INSERT INTO refresh (uuid, refresh_index, service_name, refresh_token, client_uuid, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, ?)"
 	if err := s.sql.InsertRecord(qry, r); err != nil {
-		log.Printf("unable to save refresh token: %v", err)
+		s.logger.Error("unable to save refresh token", "err", err.Error())
 		return errors.New("unable to save refresh token")
 	}
 	return nil

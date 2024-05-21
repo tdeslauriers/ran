@@ -2,8 +2,10 @@ package authentication
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"ran/internal/util"
 	"time"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
@@ -11,17 +13,27 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/session"
 )
 
-type S2sRefreshHandler struct {
-	AuthService session.S2sAuthService
+type S2sRefreshHandler interface {
+	HandleS2sRefresh(w http.ResponseWriter, r *http.Request)
 }
 
-func NewS2sRefreshHandler(service session.S2sAuthService) *S2sRefreshHandler {
-	return &S2sRefreshHandler{
-		AuthService: service,
+func NewS2sRefreshHandler(service session.S2sAuthService) S2sRefreshHandler {
+	return &s2sRefreshHandler{
+		authService: service,
+
+		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentRefresh)),
 	}
 }
 
-func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Request) {
+var _ S2sRefreshHandler = (*s2sRefreshHandler)(nil)
+
+type s2sRefreshHandler struct {
+	authService session.S2sAuthService
+
+	logger *slog.Logger
+}
+
+func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "POST" {
 		e := connect.ErrorHttp{
@@ -34,7 +46,7 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	var cmd session.RefreshCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
-		log.Printf("unable to decode s2s refresh cmd request body: %v", err)
+		h.logger.Error("failed to decode s2s refresh cmd request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "s2s refresh request improperly formatted json",
@@ -45,7 +57,7 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 	// validate request formatting
 	if err := cmd.ValidateCmd(); err != nil {
-		log.Printf("unable to validate refresh token formatt: %v", err)
+		h.logger.Error("failed to validate refresh token formatt", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    err.Error(),
@@ -55,9 +67,9 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 	// lookup refresh
 	// receiver function decrypts refresh token
-	refresh, err := h.AuthService.GetRefreshToken(cmd.RefreshToken)
+	refresh, err := h.authService.GetRefreshToken(cmd.RefreshToken)
 	if err != nil {
-		log.Printf("unable to get refresh token: %v", err)
+		h.logger.Error("unable to get refresh token", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
 			Message:    "invalid refresh token",
@@ -68,7 +80,7 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	// check refresh is for service requested
 	// this check secondary, but may indicate malicous request
 	if refresh != nil && refresh.ServiceName != cmd.ServiceName {
-		log.Printf("refresh id %s - refresh token requested for incorrect service: requested: %s, refresh token: %s", refresh.Uuid, cmd.ServiceName, refresh.ServiceName)
+		h.logger.Error(fmt.Sprintf("refresh id %s - refresh token requested for incorrect service: requested: %s, refresh token: %s", refresh.Uuid, cmd.ServiceName, refresh.ServiceName))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
 			Message:    "incorrect service name provided",
@@ -78,12 +90,12 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 	if refresh != nil {
 		// mint new token/s2s access token
-		token, err := h.AuthService.MintAuthzToken(refresh.ClientId, refresh.ServiceName)
+		token, err := h.authService.MintAuthzToken(refresh.ClientId, refresh.ServiceName)
 		if err != nil {
-			log.Printf("unable to mint new jwt for client id %s: %v", refresh.ClientId, err)
+			h.logger.Error(fmt.Sprintf("failed to mint new jwt for client id %s", refresh.ClientId), "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
-				Message:    "unable to mint new s2s token from refresh token",
+				Message:    "failed to mint new s2s token from refresh token",
 			}
 			e.SendJsonErr(w)
 			return
@@ -101,10 +113,10 @@ func (h *S2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(authz); err != nil {
-			log.Printf("unable to marshal/send s2s refresh response body: %v", err)
+			h.logger.Error("failed to marshal/send s2s refresh response body", "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
-				Message:    "unable to send s2s refresh response body due to interal service error",
+				Message:    "failed to send s2s refresh response body due to interal service error",
 			}
 			e.SendJsonErr(w)
 			return

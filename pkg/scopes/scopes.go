@@ -3,8 +3,9 @@ package scopes
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"ran/internal/util"
 	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
@@ -54,19 +55,29 @@ func (a *scopesService) GetActiveScopes() ([]session.Scope, error) {
 	return scopes, nil
 }
 
-type ScopesHandler struct {
-	Scopes   ScopesService
-	Verifier jwt.JwtVerifier
+type ScopesHandler interface {
+	GetActiveScopes(w http.ResponseWriter, r *http.Request)
 }
 
-func NewScopesHandler(scopes ScopesService, v jwt.JwtVerifier) *ScopesHandler {
-	return &ScopesHandler{
-		Scopes:   scopes,
-		Verifier: v,
+func NewScopesHandler(scopes ScopesService, v jwt.JwtVerifier) ScopesHandler {
+	return &scopesHandler{
+		scopes:   scopes,
+		verifier: v,
+
+		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentScopes)),
 	}
 }
 
-func (h *ScopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) {
+var _ ScopesHandler = (*scopesHandler)(nil)
+
+type scopesHandler struct {
+	scopes   ScopesService
+	verifier jwt.JwtVerifier
+
+	logger *slog.Logger
+}
+
+func (h *scopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
 		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
@@ -75,7 +86,7 @@ func (h *ScopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) 
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
-	if authorized, err := h.Verifier.IsAuthorized(allowed, svcToken); !authorized {
+	if authorized, err := h.verifier.IsAuthorized(allowed, svcToken); !authorized {
 		if strings.Contains(err.Error(), "unauthorized") {
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusUnauthorized,
@@ -93,16 +104,16 @@ func (h *ScopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	scopes, err := h.Scopes.GetActiveScopes()
+	scopes, err := h.scopes.GetActiveScopes()
 	if err != nil {
-		log.Print(err.Error())
+		h.logger.Error(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	scopesJson, err := json.Marshal(scopes)
 	if err != nil {
-		log.Print(err.Error())
+		h.logger.Error(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
