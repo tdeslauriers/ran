@@ -160,9 +160,9 @@ func (s2s *s2sAuthentication) Run() error {
 
 	go func() {
 
-		s2s.logger.Info(fmt.Sprintf("Starting Ran s2s authentication service on %s...", ran.Addr[1:]))
+		s2s.logger.Info(fmt.Sprintf("starting Ran s2s authentication service on %s...", ran.Addr[1:]))
 		if err := ran.Initialize(); err != http.ErrServerClosed {
-			s2s.logger.Error("Failed to start Ran s2s authenticaiton servce", "err", err.Error())
+			s2s.logger.Error("failed to start Ran s2s authenticaiton service", "err", err.Error())
 		}
 	}()
 
