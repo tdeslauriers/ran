@@ -6,8 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"ran/internal/util"
 	"ran/pkg/authentication"
 	"ran/pkg/scopes"
 
@@ -91,7 +92,7 @@ func New(config config.Config) (S2sAuthentication, error) {
 	privBlock, _ := pem.Decode(privPem)
 	privateKey, err := x509.ParseECPrivateKey(privBlock.Bytes)
 	if err != nil {
-		log.Fatalf("unable to parse x509 EC Private Key: %v", err)
+		return nil, fmt.Errorf("unable to parse x509 EC Private Key: %v", err)
 	}
 
 	signer := jwt.NewJwtSigner(privateKey)
@@ -112,6 +113,8 @@ func New(config config.Config) (S2sAuthentication, error) {
 		verifier:      verifier,
 		authService:   authService,
 		scopesService: scopesService,
+
+		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentS2s)),
 	}, nil
 
 }
@@ -125,6 +128,8 @@ type s2sAuthentication struct {
 	verifier      jwt.JwtVerifier
 	authService   session.S2sAuthService
 	scopesService scopes.ScopesService
+
+	logger *slog.Logger
 }
 
 func (s2s s2sAuthentication) CloseDb() error {
@@ -155,9 +160,9 @@ func (s2s *s2sAuthentication) Run() error {
 
 	go func() {
 
-		log.Printf("Starting Ran s2s authentication service on %s...", ran.Addr[1:])
+		s2s.logger.Info(fmt.Sprintf("Starting Ran s2s authentication service on %s...", ran.Addr[1:]))
 		if err := ran.Initialize(); err != http.ErrServerClosed {
-			log.Fatalf("Failed to start Ran s2s authenticaiton servce: %v", err)
+			s2s.logger.Error("Failed to start Ran s2s authenticaiton servce", "err", err.Error())
 		}
 	}()
 
