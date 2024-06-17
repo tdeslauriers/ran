@@ -15,8 +15,8 @@ func main() {
 
 	// service definitions
 	def := config.SvcDefinition{
-		Name: "ran",
-		Tls:  config.MutualTls,
+		ServiceName: "ran",
+		Tls:         config.MutualTls,
 		Requires: config.Requires{
 			Client:           false,
 			Db:               true,

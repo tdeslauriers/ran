@@ -74,7 +74,7 @@ func New(config config.Config) (S2sAuthentication, error) {
 		return nil, fmt.Errorf("failed to decode hmac key: %v", err)
 	}
 
-	indexer := data.NewHmacIndexer(hmacSecret)
+	indexer := data.NewIndexer(hmacSecret)
 
 	// field level encryption
 	aes, err := base64.StdEncoding.DecodeString(config.Database.FieldKey)
@@ -98,7 +98,7 @@ func New(config config.Config) (S2sAuthentication, error) {
 	signer := jwt.NewJwtSigner(privateKey)
 
 	// jwt verifier
-	verifier := jwt.NewJwtVerifier(config.Name, &privateKey.PublicKey)
+	verifier := jwt.NewJwtVerifier(config.ServiceName, &privateKey.PublicKey)
 
 	// s2s auth service
 	authService := authentication.NewS2sAuthService(repository, signer, indexer, cryptor)

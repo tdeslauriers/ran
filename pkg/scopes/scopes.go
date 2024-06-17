@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"ran/internal/util"
-	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/data"
@@ -80,41 +79,40 @@ type scopesHandler struct {
 func (h *scopesHandler) GetActiveScopes(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
-		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "only GET http method allowed",
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
 	if authorized, err := h.verifier.IsAuthorized(allowed, svcToken); !authorized {
-		if strings.Contains(err.Error(), "unauthorized") {
-			e := connect.ErrorHttp{
-				StatusCode: http.StatusUnauthorized,
-				Message:    err.Error(),
-			}
-			e.SendJsonErr(w)
-			return
-		} else {
-			e := connect.ErrorHttp{
-				StatusCode: http.StatusInternalServerError,
-				Message:    fmt.Sprintf("unable to validate/build service token: %v", err),
-			}
-			e.SendJsonErr(w)
-			return
-		}
+		h.logger.Error("failed to validate s2s token", "err", err.Error())
+		connect.RespondAuthFailure(connect.S2s, err, w)
 	}
 
 	scopes, err := h.scopes.GetActiveScopes()
 	if err != nil {
-		h.logger.Error(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to get active scopes", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "internal service error: unable to return scopes",
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
 	scopesJson, err := json.Marshal(scopes)
 	if err != nil {
-		h.logger.Error(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.logger.Error("failed to unmarshal scopes json payload", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "internal service error",
+		}
+		e.SendJsonErr(w)
 		return
 	}
 

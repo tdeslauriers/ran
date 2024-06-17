@@ -60,15 +60,15 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 		FROM client 
 		WHERE uuid = ?`
 	if err := s.sql.SelectRecord(qry, &s2sClient, clientId); err != nil {
-		s.logger.Error("unable to retrieve s2s client record: %v", "err", err.Error())
+		s.logger.Error("unable to retrieve s2s client record", "err", err.Error())
 		return errors.New("unable to retrieve s2s client record")
 	}
 
-	// password checked first to prevent account enumeration
+	// validate password
 	secret := []byte(clientSecret)
 	hash := []byte(s2sClient.Password)
 	if err := bcrypt.CompareHashAndPassword(hash, secret); err != nil {
-		s.logger.Error("unable to validate password: %v", "err", err.Error())
+		s.logger.Error("unable to validate password", "err", err.Error())
 		return errors.New("unable to validate password")
 	}
 
@@ -126,7 +126,7 @@ func (s *s2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtToken,
 
 	scopes, err := s.GetUserScopes(subject, service)
 	if len(scopes) < 1 {
-		return nil, fmt.Errorf("subject %s has not scopes for this %s", subject, service)
+		return nil, fmt.Errorf("subject %s has no scopes for this %s", subject, service)
 	}
 	if err != nil {
 		return nil, err
@@ -216,7 +216,7 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*session.S2sRefre
 	}
 
 	// decrypt refresh token for use
-	decrypted, err := s.cryptor.DecyptServiceData(refresh.RefreshToken)
+	decrypted, err := s.cryptor.DecryptServiceData(refresh.RefreshToken)
 	if err != nil {
 		return nil, fmt.Errorf("unable to decrypt refresh token with uuid %s: %v", refresh.Uuid, err)
 	}
@@ -244,7 +244,7 @@ func (s *s2sAuthService) PersistRefresh(r session.S2sRefresh) error {
 	r.RefreshIndex = index
 
 	// encrypt refresh token for db reocrd
-	encrypted, err := s.cryptor.EncyptServiceData(r.RefreshToken)
+	encrypted, err := s.cryptor.EncryptServiceData(r.RefreshToken)
 	if err != nil {
 		return fmt.Errorf("unable to encrypt refresh token for database entry")
 	}
