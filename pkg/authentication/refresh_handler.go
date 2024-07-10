@@ -10,14 +10,15 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/data"
-	"github.com/tdeslauriers/carapace/pkg/session"
+	"github.com/tdeslauriers/carapace/pkg/session/provider"
+	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
 
 type S2sRefreshHandler interface {
 	HandleS2sRefresh(w http.ResponseWriter, r *http.Request)
 }
 
-func NewS2sRefreshHandler(service session.S2sAuthService) S2sRefreshHandler {
+func NewS2sRefreshHandler(service types.S2sAuthService) S2sRefreshHandler {
 	return &s2sRefreshHandler{
 		authService: service,
 
@@ -28,7 +29,7 @@ func NewS2sRefreshHandler(service session.S2sAuthService) S2sRefreshHandler {
 var _ S2sRefreshHandler = (*s2sRefreshHandler)(nil)
 
 type s2sRefreshHandler struct {
-	authService session.S2sAuthService
+	authService types.S2sAuthService
 
 	logger *slog.Logger
 }
@@ -43,7 +44,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		e.SendJsonErr(w)
 		return
 	}
-	var cmd session.RefreshCmd
+	var cmd types.RefreshCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
 		h.logger.Error("failed to decode s2s refresh cmd request body", "err", err.Error())
@@ -102,7 +103,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		}
 
 		// respond with authorization data
-		authz := &session.S2sAuthorization{
+		authz := &provider.S2sAuthorization{
 			Jti:            token.Claims.Jti,
 			ServiceName:    cmd.ServiceName,
 			ServiceToken:   token.Token,

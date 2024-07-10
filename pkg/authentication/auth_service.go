@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/carapace/pkg/session"
+	"github.com/tdeslauriers/carapace/pkg/session/types"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -22,7 +22,7 @@ const (
 	RefreshDuration time.Duration = time.Duration(30)
 )
 
-func NewS2sAuthService(sql data.SqlRepository, mint jwt.JwtSigner, indexer data.Indexer, ciph data.Cryptor) session.S2sAuthService {
+func NewS2sAuthService(sql data.SqlRepository, mint jwt.JwtSigner, indexer data.Indexer, ciph data.Cryptor) types.S2sAuthService {
 	return &s2sAuthService{
 		sql:     sql,
 		mint:    mint,
@@ -33,7 +33,7 @@ func NewS2sAuthService(sql data.SqlRepository, mint jwt.JwtSigner, indexer data.
 	}
 }
 
-var _ session.S2sAuthService = (*s2sAuthService)(nil)
+var _ types.S2sAuthService = (*s2sAuthService)(nil)
 
 type s2sAuthService struct {
 	sql     data.SqlRepository
@@ -46,7 +46,7 @@ type s2sAuthService struct {
 
 func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) error {
 
-	var s2sClient session.S2sClientData
+	var s2sClient types.S2sClient
 	qry := `
 		SELECT 
 			uuid, 
@@ -87,9 +87,9 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 	return nil
 }
 
-func (s *s2sAuthService) GetUserScopes(uuid, service string) ([]session.Scope, error) {
+func (s *s2sAuthService) GetUserScopes(uuid, service string) ([]types.Scope, error) {
 
-	var scopes []session.Scope
+	var scopes []types.Scope
 	qry := `
 		SELECT 
 			s.uuid,
@@ -147,7 +147,7 @@ func (s *s2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtToken,
 		Jti:       jti.String(),
 		Issuer:    "ran",
 		Subject:   subject,
-		Audience:  session.BuildAudiences(scopes),
+		Audience:  types.BuildAudiences(scopes),
 		IssuedAt:  currentTime.Unix(),
 		NotBefore: currentTime.Unix(),
 		Expires:   currentTime.Add(TokenDuration * time.Minute).Unix(),
@@ -166,7 +166,7 @@ func (s *s2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtToken,
 
 // finds by regenerating blind index
 // decrypts refresh token for use
-func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*session.S2sRefresh, error) {
+func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh, error) {
 
 	// re-create blind index for lookup.
 	index, err := s.indexer.ObtainBlindIndex(refreshToken)
@@ -175,7 +175,7 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*session.S2sRefre
 	}
 
 	// look up refresh
-	var refresh session.S2sRefresh
+	var refresh types.S2sRefresh
 	qry := `
 		SELECT 
 			uuid, 
@@ -227,7 +227,7 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*session.S2sRefre
 
 // creates primary key and blind index
 // encrypts refresh token
-func (s *s2sAuthService) PersistRefresh(r session.S2sRefresh) error {
+func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 	// create primary key uuid for db record
 	refreshId, err := uuid.NewRandom()

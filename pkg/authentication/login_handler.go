@@ -11,7 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/data"
-	"github.com/tdeslauriers/carapace/pkg/session"
+	"github.com/tdeslauriers/carapace/pkg/session/provider"
+	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
 
 const loginFailedMsg string = "login failed due to server error."
@@ -20,7 +21,7 @@ type LoginHandler interface {
 	HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 }
 
-func NewS2sLoginHandler(service session.S2sAuthService) LoginHandler {
+func NewS2sLoginHandler(service types.S2sAuthService) LoginHandler {
 	return &s2sLoginHandler{
 		authService: service,
 
@@ -31,7 +32,7 @@ func NewS2sLoginHandler(service session.S2sAuthService) LoginHandler {
 var _ LoginHandler = (*s2sLoginHandler)(nil)
 
 type s2sLoginHandler struct {
-	authService session.S2sAuthService
+	authService types.S2sAuthService
 
 	logger *slog.Logger
 }
@@ -47,7 +48,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var cmd session.S2sLoginCmd
+	var cmd types.S2sLoginCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
 		h.logger.Error("unable to decode json s2s login payload: %v", "err", err.Error())
@@ -103,7 +104,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		e.SendJsonErr(w)
 		return
 	}
-	refresh := session.S2sRefresh{
+	refresh := types.S2sRefresh{
 		// primary key uuid created by PersistRefresh
 		// index created by PersistRefresh
 		ServiceName:  cmd.ServiceName,
@@ -114,7 +115,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}
 
 	// don't wait to return jwt
-	go func(r session.S2sRefresh) {
+	go func(r types.S2sRefresh) {
 		err := h.authService.PersistRefresh(r) // encrypts refresh token
 		if err != nil {
 			// only logging since refresh is a convenience
@@ -123,7 +124,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}(refresh)
 
 	// respond with authorization data
-	authz := session.S2sAuthorization{
+	authz := provider.S2sAuthorization{
 		Jti:            token.Claims.Jti,
 		ServiceName:    cmd.ServiceName,
 		ServiceToken:   token.Token,

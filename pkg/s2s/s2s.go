@@ -17,7 +17,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/diagnostics"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/carapace/pkg/session"
+	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
 
 type S2sAuthentication interface {
@@ -126,7 +126,7 @@ type s2sAuthentication struct {
 	serverTls     *tls.Config
 	repository    data.SqlRepository
 	verifier      jwt.JwtVerifier
-	authService   session.S2sAuthService
+	authService   types.S2sAuthService
 	scopesService scopes.ScopesService
 
 	logger *slog.Logger

@@ -10,14 +10,14 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/carapace/pkg/session"
+	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
 
 // service scopes required
 var allowed []string = []string{"r:ran:*"}
 
 type ScopesService interface {
-	GetActiveScopes() ([]session.Scope, error)
+	GetActiveScopes() ([]types.Scope, error)
 }
 
 func NewScopesSerivce(sql data.SqlRepository) ScopesService {
@@ -32,9 +32,9 @@ type scopesService struct {
 	sql data.SqlRepository
 }
 
-func (a *scopesService) GetActiveScopes() ([]session.Scope, error) {
+func (a *scopesService) GetActiveScopes() ([]types.Scope, error) {
 
-	var scopes []session.Scope
+	var scopes []types.Scope
 	query := `
 			SELECT 
 				uuid, 
