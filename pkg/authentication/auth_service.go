@@ -87,7 +87,7 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 	return nil
 }
 
-func (s *s2sAuthService) GetUserScopes(uuid, service string) ([]types.Scope, error) {
+func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, error) {
 
 	var scopes []types.Scope
 	qry := `
@@ -103,16 +103,16 @@ func (s *s2sAuthService) GetUserScopes(uuid, service string) ([]types.Scope, err
 			LEFT JOIN client_scope cs ON s.uuid = cs.scope_uuid
 		WHERE cs.client_uuid = ?
 			AND s.service_name = ?`
-	if err := s.sql.SelectRecords(qry, &scopes, uuid, service); err != nil {
-		s.logger.Error(fmt.Sprintf("unable to retrieve scopes for client %s", uuid), "err", err.Error())
-		return scopes, fmt.Errorf("unable to retrieve scopes for client %s", uuid)
+	if err := s.sql.SelectRecords(qry, &scopes, clientId, service); err != nil {
+		s.logger.Error(fmt.Sprintf("unable to retrieve scopes for client %s", clientId), "err", err.Error())
+		return scopes, fmt.Errorf("unable to retrieve scopes for client %s", clientId)
 	}
 
 	return scopes, nil
 }
 
 // assumes credentials already validated
-func (s *s2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtToken, error) {
+func (s *s2sAuthService) MintToken(subject, service string) (*jwt.JwtToken, error) {
 
 	// jwt header
 	header := jwt.JwtHeader{Alg: jwt.ES512, Typ: jwt.TokenType}
@@ -124,7 +124,7 @@ func (s *s2sAuthService) MintAuthzToken(subject, service string) (*jwt.JwtToken,
 		return nil, errors.New("failed to mint s2s token")
 	}
 
-	scopes, err := s.GetUserScopes(subject, service)
+	scopes, err := s.GetScopes(subject, service)
 	if len(scopes) < 1 {
 		return nil, fmt.Errorf("subject %s has no scopes for this %s", subject, service)
 	}

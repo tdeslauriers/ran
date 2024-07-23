@@ -91,7 +91,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 	if refresh != nil {
 		// mint new token/s2s access token
-		token, err := h.authService.MintAuthzToken(refresh.ClientId, refresh.ServiceName)
+		token, err := h.authService.MintToken(refresh.ClientId, refresh.ServiceName)
 		if err != nil {
 			h.logger.Error(fmt.Sprintf("failed to mint new jwt for client id %s", refresh.ClientId), "err", err.Error())
 			e := connect.ErrorHttp{

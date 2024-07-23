@@ -82,7 +82,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}
 
 	// create token
-	token, err := h.authService.MintAuthzToken(cmd.ClientId, cmd.ServiceName)
+	token, err := h.authService.MintToken(cmd.ClientId, cmd.ServiceName)
 	if err != nil {
 		h.logger.Error("unable to mint s2s token: %v", "err", err.Error())
 		e := connect.ErrorHttp{
