@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"ran/internal/util"
+	"strings"
 	"time"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
@@ -91,7 +92,36 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 	if refresh != nil {
 		// mint new token/s2s access token
-		token, err := h.authService.MintToken(refresh.ClientId, refresh.ServiceName)
+		// get scopes
+		scopes, err := h.authService.GetScopes(refresh.ClientId, refresh.ServiceName)
+		if len(scopes) < 1 {
+			h.logger.Error(fmt.Sprintf("client id %s has no scopes for this %s", refresh.ClientId, cmd.ServiceName))
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusUnauthorized,
+				Message:    "client has no scopes for this service",
+			}
+			e.SendJsonErr(w)
+		}
+		if err != nil {
+			h.logger.Error(fmt.Sprintf("unable to get scope for client id %s", refresh.ClientId), "err", err.Error())
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusInternalServerError,
+				Message:    loginFailedMsg,
+			}
+			e.SendJsonErr(w)
+		}
+
+		// create scopes string: scope values, space delimited
+		var scopesBuilder strings.Builder
+		for i, v := range scopes {
+			scopesBuilder.WriteString(v.Scope)
+			if len(scopes) > 1 && i+1 < len(scopes) {
+				scopesBuilder.WriteString(" ")
+			}
+		}
+
+		// mint new token
+		token, err := h.authService.MintToken(refresh.ClientId, refresh.ServiceName, scopesBuilder.String())
 		if err != nil {
 			h.logger.Error(fmt.Sprintf("failed to mint new jwt for client id %s", refresh.ClientId), "err", err.Error())
 			e := connect.ErrorHttp{

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"ran/internal/util"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,8 +82,36 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// get scopes
+	scopes, err := h.authService.GetScopes(cmd.ClientId, cmd.ServiceName)
+	if len(scopes) < 1 {
+		h.logger.Error(fmt.Sprintf("client id %s has no scopes for this %s", cmd.ClientId, cmd.ServiceName))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusUnauthorized,
+			Message:    "client has no scopes for this service",
+		}
+		e.SendJsonErr(w)
+	}
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("unable to get scope for client id %s", cmd.ClientId), "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    loginFailedMsg,
+		}
+		e.SendJsonErr(w)
+	}
+
+	// create scopes string: scope values, space delimited
+	var scopesBuilder strings.Builder
+	for i, v := range scopes {
+		scopesBuilder.WriteString(v.Scope)
+		if len(scopes) > 1 && i+1 < len(scopes) {
+			scopesBuilder.WriteString(" ")
+		}
+	}
+
 	// create token
-	token, err := h.authService.MintToken(cmd.ClientId, cmd.ServiceName)
+	token, err := h.authService.MintToken(cmd.ClientId, cmd.ServiceName, scopesBuilder.String())
 	if err != nil {
 		h.logger.Error("unable to mint s2s token: %v", "err", err.Error())
 		e := connect.ErrorHttp{

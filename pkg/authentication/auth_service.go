@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"ran/internal/util"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -112,7 +111,7 @@ func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, err
 }
 
 // assumes credentials already validated
-func (s *s2sAuthService) MintToken(subject, service string) (*jwt.JwtToken, error) {
+func (s *s2sAuthService) MintToken(subject, service, scopes string) (*jwt.JwtToken, error) {
 
 	// jwt header
 	header := jwt.JwtHeader{Alg: jwt.ES512, Typ: jwt.TokenType}
@@ -122,23 +121,6 @@ func (s *s2sAuthService) MintToken(subject, service string) (*jwt.JwtToken, erro
 	if err != nil {
 		s.logger.Error("unable to create jti uuid", "err", err.Error())
 		return nil, errors.New("failed to mint s2s token")
-	}
-
-	scopes, err := s.GetScopes(subject, service)
-	if len(scopes) < 1 {
-		return nil, fmt.Errorf("subject %s has no scopes for this %s", subject, service)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// create scopes string: scope values, space delimited
-	var builder strings.Builder
-	for i, v := range scopes {
-		builder.WriteString(v.Scope)
-		if len(scopes) > 1 && i+1 < len(scopes) {
-			builder.WriteString(" ")
-		}
 	}
 
 	currentTime := time.Now()
@@ -151,7 +133,7 @@ func (s *s2sAuthService) MintToken(subject, service string) (*jwt.JwtToken, erro
 		IssuedAt:  currentTime.Unix(),
 		NotBefore: currentTime.Unix(),
 		Expires:   currentTime.Add(TokenDuration * time.Minute).Unix(),
-		Scopes:    builder.String(),
+		Scopes:    scopes,
 	}
 
 	jot := jwt.JwtToken{Header: header, Claims: claims}
