@@ -171,14 +171,14 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh
 		WHERE refresh_index = ?`
 	if err := s.sql.SelectRecord(qry, &refresh, index); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, errors.New("refresh token does not exist")
+			return nil, fmt.Errorf("refresh token xxxxxx-%s does not exist", refreshToken[len(refreshToken)-6:])
 		}
-		return nil, fmt.Errorf("refresh token lookup failed: %v", err)
+		return nil, fmt.Errorf("failed to lookup refresh token xxxxxx-%s: %v", refreshToken[len(refreshToken)-6:], err)
 	}
 
 	// check revoked status
 	if refresh.Revoked {
-		return nil, errors.New("refresh token has been revoked")
+		return nil, fmt.Errorf("refresh token xxxxxx-%s has been revoked", refreshToken[len(refreshToken)-6:])
 	}
 
 	// validate refresh token not expired server-side
@@ -188,10 +188,10 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh
 		go func(id string) {
 			qry := "DELETE FROM refresh WHERE uuid = ?"
 			if err := s.sql.DeleteRecord(qry, id); err != nil {
-				s.logger.Error(fmt.Sprintf("unable to delete expired refresh token %s", id), "err", err.Error())
+				s.logger.Error(fmt.Sprintf("unable to delete expired refresh token with id %s", id), "err", err.Error())
 			}
 
-			s.logger.Info(fmt.Sprintf("deleted expired refresh token id: %s", id))
+			s.logger.Info(fmt.Sprintf("deleted expired refresh token with id: %s", id))
 		}(refresh.Uuid)
 
 		return nil, errors.New("refresh token is expired")
