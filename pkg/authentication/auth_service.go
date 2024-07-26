@@ -111,7 +111,7 @@ func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, err
 }
 
 // assumes credentials already validated
-func (s *s2sAuthService) MintToken(subject, service, scopes string) (*jwt.JwtToken, error) {
+func (s *s2sAuthService) MintToken(subject, scopes string) (*jwt.JwtToken, error) {
 
 	// jwt header
 	header := jwt.JwtHeader{Alg: jwt.ES512, Typ: jwt.TokenType}

@@ -59,7 +59,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 	// validate request formatting
 	if err := cmd.ValidateCmd(); err != nil {
-		h.logger.Error("failed to validate refresh token formatt", "err", err.Error())
+		h.logger.Error("failed to validate refresh token format", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    err.Error(),
@@ -103,7 +103,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			e.SendJsonErr(w)
 		}
 		if err != nil {
-			h.logger.Error(fmt.Sprintf("unable to get scope for client id %s", refresh.ClientId), "err", err.Error())
+			h.logger.Error(fmt.Sprintf("unable to get scopes for client id %s", refresh.ClientId), "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
 				Message:    loginFailedMsg,
@@ -121,7 +121,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		}
 
 		// mint new token
-		token, err := h.authService.MintToken(refresh.ClientId, refresh.ServiceName, scopesBuilder.String())
+		token, err := h.authService.MintToken(refresh.ClientId, scopesBuilder.String())
 		if err != nil {
 			h.logger.Error(fmt.Sprintf("failed to mint new jwt for client id %s", refresh.ClientId), "err", err.Error())
 			e := connect.ErrorHttp{
