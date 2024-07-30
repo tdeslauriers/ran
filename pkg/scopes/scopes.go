@@ -58,7 +58,7 @@ type ScopesHandler interface {
 	GetActiveScopes(w http.ResponseWriter, r *http.Request)
 }
 
-func NewScopesHandler(scopes ScopesService, v jwt.JwtVerifier) ScopesHandler {
+func NewScopesHandler(scopes ScopesService, v jwt.Verifier) ScopesHandler {
 	return &scopesHandler{
 		scopes:   scopes,
 		verifier: v,
@@ -71,7 +71,7 @@ var _ ScopesHandler = (*scopesHandler)(nil)
 
 type scopesHandler struct {
 	scopes   ScopesService
-	verifier jwt.JwtVerifier
+	verifier jwt.Verifier
 
 	logger *slog.Logger
 }

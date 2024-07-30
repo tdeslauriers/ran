@@ -21,7 +21,7 @@ const (
 	RefreshDuration time.Duration = time.Duration(30)
 )
 
-func NewS2sAuthService(sql data.SqlRepository, mint jwt.JwtSigner, indexer data.Indexer, ciph data.Cryptor) types.S2sAuthService {
+func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, indexer data.Indexer, ciph data.Cryptor) types.S2sAuthService {
 	return &s2sAuthService{
 		sql:     sql,
 		mint:    mint,
@@ -36,7 +36,7 @@ var _ types.S2sAuthService = (*s2sAuthService)(nil)
 
 type s2sAuthService struct {
 	sql     data.SqlRepository
-	mint    jwt.JwtSigner
+	mint    jwt.Signer
 	indexer data.Indexer
 	cryptor data.Cryptor
 
@@ -111,10 +111,10 @@ func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, err
 }
 
 // assumes credentials already validated
-func (s *s2sAuthService) MintToken(subject, scopes string) (*jwt.JwtToken, error) {
+func (s *s2sAuthService) MintToken(subject, scopes string) (*jwt.Token, error) {
 
 	// jwt header
-	header := jwt.JwtHeader{Alg: jwt.ES512, Typ: jwt.TokenType}
+	header := jwt.Header{Alg: jwt.ES512, Typ: jwt.TokenType}
 
 	// set up jwt claims fields
 	jti, err := uuid.NewRandom()
@@ -125,7 +125,7 @@ func (s *s2sAuthService) MintToken(subject, scopes string) (*jwt.JwtToken, error
 
 	currentTime := time.Now()
 
-	claims := jwt.JwtClaims{
+	claims := jwt.Claims{
 		Jti:       jti.String(),
 		Issuer:    "ran",
 		Subject:   subject,
@@ -136,9 +136,9 @@ func (s *s2sAuthService) MintToken(subject, scopes string) (*jwt.JwtToken, error
 		Scopes:    scopes,
 	}
 
-	jot := jwt.JwtToken{Header: header, Claims: claims}
+	jot := jwt.Token{Header: header, Claims: claims}
 
-	err = s.mint.MintJwt(&jot)
+	err = s.mint.Mint(&jot)
 	if err != nil {
 		return nil, fmt.Errorf("unable to mint jwt: %v", err)
 	}

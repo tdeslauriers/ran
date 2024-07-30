@@ -95,10 +95,10 @@ func New(config config.Config) (S2sAuthentication, error) {
 		return nil, fmt.Errorf("unable to parse x509 EC Private Key: %v", err)
 	}
 
-	signer := jwt.NewJwtSigner(privateKey)
+	signer := jwt.NewSigner(privateKey)
 
 	// jwt verifier
-	verifier := jwt.NewJwtVerifier(config.ServiceName, &privateKey.PublicKey)
+	verifier := jwt.NewVerifier(config.ServiceName, &privateKey.PublicKey)
 
 	// s2s auth service
 	authService := authentication.NewS2sAuthService(repository, signer, indexer, cryptor)
@@ -125,7 +125,7 @@ type s2sAuthentication struct {
 	congig        config.Config
 	serverTls     *tls.Config
 	repository    data.SqlRepository
-	verifier      jwt.JwtVerifier
+	verifier      jwt.Verifier
 	authService   types.S2sAuthService
 	scopesService scopes.ScopesService
 
