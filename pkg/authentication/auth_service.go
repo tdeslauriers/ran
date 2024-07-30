@@ -123,11 +123,11 @@ func (s *s2sAuthService) MintToken(subject, scopes string) (*jwt.Token, error) {
 		return nil, errors.New("failed to mint s2s token")
 	}
 
-	currentTime := time.Now()
+	currentTime := time.Now().UTC()
 
 	claims := jwt.Claims{
 		Jti:       jti.String(),
-		Issuer:    "ran",
+		Issuer:    util.SericeName,
 		Subject:   subject,
 		Audience:  types.BuildAudiences(scopes),
 		IssuedAt:  currentTime.Unix(),
