@@ -307,7 +307,7 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 		ndx, err := s.indexer.ObtainBlindIndex(refresh)
 		if err != nil {
-			ch <- fmt.Errorf("failed to create blind index for refresh token xxxxxx-%s: %v", refresh[:len(refresh)-6], err)
+			ch <- fmt.Errorf("%s for refresh token xxxxxx-%s: %v", ErrGenIndex, refresh[len(refresh)-6:], err)
 			return
 		}
 		*index = ndx
@@ -320,7 +320,7 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 		encrypted, err := s.cryptor.EncryptServiceData(service)
 		if err != nil {
-			ch <- fmt.Errorf("failed to encrypt service name %s for db record: %v", service, err)
+			ch <- fmt.Errorf("%s %s for db record: %v", ErrEncryptServiceName, service, err)
 			return
 		}
 		*encryptedService = encrypted
@@ -333,7 +333,7 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 		encrypted, err := s.cryptor.EncryptServiceData(refresh)
 		if err != nil {
-			ch <- fmt.Errorf("failed to encrypt refresh token xxxxxx-%s for db record: %v", refresh[:len(refresh)-6], err)
+			ch <- fmt.Errorf("%s xxxxxx-%s for db record: %v", ErrEncryptRefresh, refresh[len(refresh)-6:], err)
 			return
 		}
 		*encryptedRefresh = encrypted
@@ -346,7 +346,7 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 		encrypted, err := s.cryptor.EncryptServiceData(client)
 		if err != nil {
-			ch <- fmt.Errorf("failed to encrypt client id %s for db record: %v", client, err)
+			ch <- fmt.Errorf("%s %s for db record: %v", ErrEncryptClientId, client, err)
 			return
 		}
 		*encryptedClient = encrypted
@@ -359,7 +359,7 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 		i, err := s.indexer.ObtainBlindIndex(client)
 		if err != nil {
-			ch <- fmt.Errorf("failed to create blind index for client id %s: %v", client, err)
+			ch <- fmt.Errorf("failed to generate blind index for client id %s: %v", client, err)
 			return
 		}
 		*index = i
