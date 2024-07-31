@@ -45,7 +45,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		e.SendJsonErr(w)
 		return
 	}
-	var cmd types.RefreshCmd
+	var cmd types.S2sRefreshCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
 		h.logger.Error("failed to decode s2s refresh cmd request body", "err", err.Error())

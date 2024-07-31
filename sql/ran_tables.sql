@@ -32,11 +32,12 @@ CREATE INDEX idx_scope_client_xref ON client_scope(scope_uuid);
 CREATE TABLE refresh (
     uuid CHAR(36) PRIMARY KEY,
     refresh_index VARCHAR(128) NOT NULL,
-    service_name VARCHAR(32),
+    service_name VARCHAR(128),
     refresh_token CHAR(36) NOT NULL,
     client_uuid CHAR(36) NOT NULL,
+    client_index VARCHAR(128) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     revoked BOOLEAN NOT NULL
 );
 CREATE UNIQUE INDEX idx_refreshindex ON refresh(refresh_index);
-CREATE INDEX idx_refresh_sevice_name ON refresh(service_name);
+CREATE UNIQUE INDEX idx_client_index ON refresh(client_index);

@@ -157,9 +157,9 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		Jti:            token.Claims.Jti,
 		ServiceName:    cmd.ServiceName,
 		ServiceToken:   token.Token,
-		TokenExpires:   data.CustomTime{Time: time.Unix(token.Claims.Expires, 0)},
+		TokenExpires:   data.CustomTime{Time: time.Unix(token.Claims.Expires, 0).UTC()},
 		RefreshToken:   refresh.RefreshToken,
-		RefreshExpires: data.CustomTime{Time: time.Unix(token.Claims.IssuedAt, 0).Add(RefreshDuration * time.Minute)},
+		RefreshExpires: data.CustomTime{Time: time.Unix(token.Claims.IssuedAt, 0).UTC().Add(RefreshDuration * time.Minute)},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
