@@ -113,35 +113,21 @@ func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, err
 }
 
 // assumes credentials already validated
-func (s *s2sAuthService) MintToken(subject, scopes string) (*jwt.Token, error) {
+func (s *s2sAuthService) MintToken(claims jwt.Claims) (*jwt.Token, error) {
 
 	// jwt header
-	header := jwt.Header{Alg: jwt.ES512, Typ: jwt.TokenType}
-
-	// set up jwt claims fields
-	jti, err := uuid.NewRandom()
-	if err != nil {
-		s.logger.Error("unable to create jwt jti uuid", "err", err.Error())
-		return nil, errors.New("failed to mint s2s token")
+	header := jwt.Header{
+		Alg: jwt.ES512,
+		Typ: jwt.TokenType,
 	}
 
-	currentTime := time.Now().UTC()
-
-	claims := jwt.Claims{
-		Jti:       jti.String(),
-		Issuer:    util.SericeName,
-		Subject:   subject,
-		Audience:  types.BuildAudiences(scopes),
-		IssuedAt:  currentTime.Unix(),
-		NotBefore: currentTime.Unix(),
-		Expires:   currentTime.Add(TokenDuration * time.Minute).Unix(),
-		Scopes:    scopes,
+	jot := jwt.Token{
+		Header: header,
+		Claims: claims,
 	}
-
-	jot := jwt.Token{Header: header, Claims: claims}
 
 	if err := s.mint.Mint(&jot); err != nil {
-		return nil, fmt.Errorf("unable to mint jwt for client id %s: %v", subject, err)
+		return nil, fmt.Errorf("failed to mint jwt for client id %s: %v", claims.Subject, err)
 	}
 
 	return &jot, nil

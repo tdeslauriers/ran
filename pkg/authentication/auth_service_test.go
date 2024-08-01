@@ -1,12 +1,15 @@
 package authentication
 
 import (
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
 
@@ -14,6 +17,8 @@ const (
 	// test constants
 	RealServiceName = "real-service"
 	RealClientId    = "real-client"
+
+	RealScopes = "r:shaw:* w:shaw:*"
 )
 
 type mockIndexer struct {
@@ -63,6 +68,25 @@ func (m *mockSqlRepository) InsertRecord(query string, record interface{}) error
 func (m *mockSqlRepository) UpdateRecord(query string, args ...interface{}) error { return nil }
 func (m *mockSqlRepository) DeleteRecord(query string, args ...interface{}) error { return nil }
 func (m *mockSqlRepository) Close() error                                         { return nil }
+
+type mockSigner struct{}
+
+func (s *mockSigner) Mint(token *jwt.Token) error {
+
+	if token.Claims.Subject == RealClientId {
+		msg, _ := token.BuildBaseString()
+		token.BaseString = msg
+
+		token.Signature = []byte("real-signature")
+
+		token.Token = fmt.Sprintf("%s.%s", token.BaseString, base64.URLEncoding.EncodeToString(token.Signature))
+
+		return nil
+	} else {
+		return errors.New("failed to create jwt signature")
+	}
+
+}
 
 func TestPersistToken(t *testing.T) {
 	// test cases
@@ -129,4 +153,89 @@ func TestPersistToken(t *testing.T) {
 		})
 	}
 
+}
+
+func TestMintToken(t *testing.T) {
+
+	tests := []struct {
+		name        string
+		claims      jwt.Claims
+		jwt         *jwt.Token
+		expectedErr error
+	}{
+		{
+			name: "success - mint token",
+			claims: jwt.Claims{
+				Jti:       "jti",
+				Issuer:    "issuer",
+				Subject:   RealClientId,
+				Audience:  []string{"audience"},
+				IssuedAt:  time.Now().UTC().Unix(),
+				NotBefore: time.Now().UTC().Unix(),
+				Expires:   time.Now().UTC().Add(5 * time.Minute).Unix(),
+				Scopes:    RealScopes,
+			},
+			jwt: &jwt.Token{
+				Header: jwt.Header{
+					Alg: "HS256",
+					Typ: jwt.TokenType,
+				},
+				Claims: jwt.Claims{
+					Jti:       "jti",
+					Issuer:    "issuer",
+					Subject:   RealClientId,
+					Audience:  []string{"audience"},
+					IssuedAt:  time.Now().UTC().Unix(),
+					NotBefore: time.Now().UTC().Unix(),
+					Expires:   time.Now().UTC().Add(5 * time.Minute).Unix(),
+					Scopes:    RealScopes,
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "failure - triggering jwt.Mint error",
+			claims: jwt.Claims{
+				Jti:       "1234",
+				Issuer:    "issuer",
+				Subject:   "trigger error",
+				Audience:  types.BuildAudiences(RealScopes),
+				IssuedAt:  time.Now().UTC().Unix(),
+				NotBefore: time.Now().UTC().Unix(),
+				Expires:   time.Now().Add(5 * time.Minute).Unix(),
+				Scopes:    RealScopes,
+			},
+			jwt:         nil,
+			expectedErr: errors.New("failed to mint jwt for client id"),
+		},
+	}
+
+	mockS2sAuthService := NewS2sAuthService(&mockSqlRepository{}, &mockSigner{}, &mockIndexer{}, &mockCryptor{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jot, err := mockS2sAuthService.MintToken(tt.claims)
+			if err != nil && !strings.Contains(err.Error(), tt.expectedErr.Error()) {
+				t.Errorf("expected %v, got %v", tt.expectedErr, err)
+			}
+			if err == nil {
+				if jot.BaseString == "" {
+					t.Errorf("expected base string to be populated")
+				}
+
+				if jot.Signature == nil {
+					t.Errorf("expected signature to be populated")
+				}
+
+				if jot.Token == "" {
+					t.Errorf("expected token to be populated")
+				} else {
+					segments := strings.Split(jot.Token, ".")
+					if len(segments) != 3 {
+						t.Errorf("expected token to have 3 segments, got %d", len(segments))
+					}
+				}
+			}
+		})
+	}
 }

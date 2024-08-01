@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/provider"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
@@ -110,8 +111,33 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// set up jwt claims fields
+	jti, err := uuid.NewRandom()
+	if err != nil {
+		h.logger.Error("unable to create jwt jti uuid", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to mint s2s token",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	currentTime := time.Now().UTC()
+
+	claims := jwt.Claims{
+		Jti:       jti.String(),
+		Issuer:    util.SericeName,
+		Subject:   cmd.ClientId,
+		Audience:  types.BuildAudiences(scopesBuilder.String()),
+		IssuedAt:  currentTime.Unix(),
+		NotBefore: currentTime.Unix(),
+		Expires:   currentTime.Add(TokenDuration * time.Minute).Unix(),
+		Scopes:    scopesBuilder.String(),
+	}
+
 	// create token
-	token, err := h.authService.MintToken(cmd.ClientId, scopesBuilder.String())
+	token, err := h.authService.MintToken(claims)
 	if err != nil {
 		h.logger.Error("unable to mint s2s token: %v", "err", err.Error())
 		e := connect.ErrorHttp{
