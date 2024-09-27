@@ -73,7 +73,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	// receiver function decrypts refresh token
 	refresh, err := h.authService.GetRefreshToken(cmd.RefreshToken)
 	if err != nil {
-		h.logger.Error("unable to get refresh token", "err", err.Error())
+		h.logger.Error("failed to get refresh token", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
 			Message:    "invalid refresh token",
@@ -105,7 +105,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			e.SendJsonErr(w)
 		}
 		if err != nil {
-			h.logger.Error(fmt.Sprintf("unable to get scopes for client id %s", refresh.ClientId), "err", err.Error())
+			h.logger.Error(fmt.Sprintf("failed to get scopes for client id %s", refresh.ClientId), "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
 				Message:    loginFailedMsg,

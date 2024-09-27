@@ -17,6 +17,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/diagnostics"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
+	"github.com/tdeslauriers/carapace/pkg/schedule"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
 
@@ -106,6 +107,9 @@ func New(config config.Config) (S2sAuthentication, error) {
 	// scopes service
 	scopesService := scopes.NewScopesSerivce(repository)
 
+	// clean up: database
+	cleanup := schedule.NewCleanup(repository)
+
 	return &s2sAuthentication{
 		congig:        config,
 		serverTls:     serverTlsConfig,
@@ -113,6 +117,7 @@ func New(config config.Config) (S2sAuthentication, error) {
 		verifier:      verifier,
 		authService:   authService,
 		scopesService: scopesService,
+		cleanup:       cleanup,
 
 		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentS2s)),
 	}, nil
@@ -128,6 +133,7 @@ type s2sAuthentication struct {
 	verifier      jwt.Verifier
 	authService   types.S2sAuthService
 	scopesService scopes.ScopesService
+	cleanup       schedule.Cleanup
 
 	logger *slog.Logger
 }
@@ -165,6 +171,8 @@ func (s2s *s2sAuthentication) Run() error {
 			s2s.logger.Error("failed to start Ran s2s authenticaiton service", "err", err.Error())
 		}
 	}()
+
+	go s2s.cleanup.ExpiredRefresh(3) // 2am +- 30; refresh tokens live 3 hours
 
 	return nil
 }

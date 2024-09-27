@@ -86,10 +86,10 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	// get scopes
 	scopes, err := h.authService.GetScopes(cmd.ClientId, cmd.ServiceName)
 	if len(scopes) < 1 {
-		h.logger.Error(fmt.Sprintf("client id %s has no scopes for this %s", cmd.ClientId, cmd.ServiceName))
+		h.logger.Error(fmt.Sprintf("client id %s has no scopes for this service: %s", cmd.ClientId, cmd.ServiceName))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
-			Message:    "client has no scopes for this service",
+			Message:    fmt.Sprintf("client has no scopes for this service: %s", cmd.ServiceName),
 		}
 		e.SendJsonErr(w)
 	}

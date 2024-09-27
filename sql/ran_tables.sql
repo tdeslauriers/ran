@@ -40,4 +40,4 @@ CREATE TABLE refresh (
     revoked BOOLEAN NOT NULL
 );
 CREATE UNIQUE INDEX idx_refreshindex ON refresh(refresh_index);
-CREATE UNIQUE INDEX idx_client_index ON refresh(client_index);
+CREATE INDEX idx_client_index ON refresh(client_index);

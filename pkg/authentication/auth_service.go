@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	TokenDuration   time.Duration = time.Duration(5)
-	RefreshDuration time.Duration = time.Duration(30)
+	TokenDuration   time.Duration = time.Duration(5)   // minutes
+	RefreshDuration time.Duration = time.Duration(180) // minutes
 )
 
 func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, indexer data.Indexer, ciph data.Cryptor) types.S2sAuthService {
@@ -137,6 +137,10 @@ func (s *s2sAuthService) MintToken(claims jwt.Claims) (*jwt.Token, error) {
 // decrypts refresh token for use
 func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh, error) {
 
+	if len(refreshToken) < 16 || len(refreshToken) > 64 {
+		return nil, errors.New("invalid refresh token")
+	}
+
 	// re-create blind index for lookup.
 	index, err := s.indexer.ObtainBlindIndex(refreshToken)
 	if err != nil {
@@ -182,7 +186,7 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh
 			s.logger.Info(fmt.Sprintf("deleted expired refresh token with id: %s", id))
 		}(refresh.Uuid)
 
-		return nil, errors.New("refresh token is expired")
+		return nil, fmt.Errorf("refresh token xxxxxx-%s is expired", refreshToken[len(refreshToken)-6:])
 	}
 
 	var (
@@ -379,8 +383,18 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 	qry := "INSERT INTO refresh (uuid, refresh_index, service_name, refresh_token, client_uuid, client_index, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
 	if err := s.sql.InsertRecord(qry, r); err != nil {
-		s.logger.Error("unable to save refresh token", "err", err.Error())
-		return errors.New("unable to save refresh token")
+		s.logger.Error("faied to save refresh token", "err", err.Error())
+		return errors.New("failed to save refresh token")
 	}
+	return nil
+}
+
+// TODO: implement
+func (s *s2sAuthService) DestroyRefresh(token string) error {
+	return nil
+}
+
+// TODO: implement
+func (s *s2sAuthService) RevokeRefresh(token string) error {
 	return nil
 }
