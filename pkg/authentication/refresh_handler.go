@@ -67,10 +67,10 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
+		return
 	}
 
-	// lookup refresh
-	// receiver function decrypts refresh token
+	// lookup refresh token
 	refresh, err := h.authService.GetRefreshToken(cmd.RefreshToken)
 	if err != nil {
 		h.logger.Error("failed to get refresh token", "err", err.Error())
@@ -79,9 +79,10 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			Message:    "invalid refresh token",
 		}
 		e.SendJsonErr(w)
+		return
 	}
 
-	// check refresh is for service requested
+	// check if refresh is for service requested
 	// this check secondary, but may indicate malicous request
 	if refresh != nil && refresh.ServiceName != cmd.ServiceName {
 		h.logger.Error(fmt.Sprintf("refresh id %s - refresh token requested for incorrect service: requested: %s, refresh token: %s", refresh.Uuid, cmd.ServiceName, refresh.ServiceName))
@@ -90,6 +91,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			Message:    "incorrect service name provided",
 		}
 		e.SendJsonErr(w)
+		return
 	}
 
 	if refresh != nil {
@@ -158,6 +160,15 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			e.SendJsonErr(w)
 			return
 		}
+
+		// oppotunistically delete claimed refresh token
+		go func(id string) {
+			if err := h.authService.DestroyRefresh(id); err != nil {
+				h.logger.Error(fmt.Sprintf("failed to delete claimed refresh token record uuid %s", id), "err", err.Error())
+				return
+			}
+			h.logger.Info(fmt.Sprintf("deleted claimed refresh token record uuid %s", id))
+		}(refresh.Uuid)
 
 		// respond with authorization data
 		authz := &provider.S2sAuthorization{

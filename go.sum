@@ -32,6 +32,8 @@ github.com/tdeslauriers/carapace v0.0.141 h1:I68AFCfxen9qNizAL8KYH1GKFJG7NeEd6ne
 github.com/tdeslauriers/carapace v0.0.141/go.mod h1:sBb/Im2oYwhkEeU8rJP85LHAqBe6SKX74mlbTjr/lac=
 github.com/tdeslauriers/carapace v0.0.149 h1:/PW9yoJdfrw+sIQ2X3ILeZA5Fv2Uxd0oibUrFa6KFHQ=
 github.com/tdeslauriers/carapace v0.0.149/go.mod h1:sBb/Im2oYwhkEeU8rJP85LHAqBe6SKX74mlbTjr/lac=
+github.com/tdeslauriers/carapace v0.0.150 h1:QFQWle6ZDL+w3k+YKgBYVyJDHw0vUOS5yNfLV3cL3OY=
+github.com/tdeslauriers/carapace v0.0.150/go.mod h1:sBb/Im2oYwhkEeU8rJP85LHAqBe6SKX74mlbTjr/lac=
 golang.org/x/crypto v0.24.0 h1:mnl8DM0o513X8fdIkmyFE/5hTYxbwYOjDS/+rK6qpRI=
 golang.org/x/crypto v0.24.0/go.mod h1:Z1PMYSOR5nyMcyAVAIQSKCDwalqy85Aqn1x3Ws4L5DM=
 golang.org/x/crypto v0.25.0 h1:ypSNr+bnYL2YhwoMt2zPxHFmbAN1KZs/njMG3hxUp30=

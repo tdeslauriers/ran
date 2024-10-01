@@ -389,8 +389,35 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 	return nil
 }
 
-// TODO: implement
+// DestroyRefresh deletes a refresh token record from the database.
 func (s *s2sAuthService) DestroyRefresh(token string) error {
+
+	// light validation: redundant check, but good practice
+	if len(token) < 16 || len(token) > 64 {
+		return fmt.Errorf("invalid refresh token: must be between %d and %d characters", 16, 64)
+	}
+
+	// create blind index
+	index, err := s.indexer.ObtainBlindIndex(token)
+	if err != nil {
+		return fmt.Errorf("failed to generate blind index for refresh token xxxxxx-%s: %v", token[len(token)-6:], err)
+	}
+
+	// calling record to validate it exists
+	// TODO: update crud functions in carapace to return rows affected so calls can be consolidated.
+	qry := `SELECT EXISTS (SELECT 1 FROM refresh WHERE refresh_index = ?)`
+	if exists, err := s.sql.SelectExists(qry, index); err != nil {
+		return fmt.Errorf("failed to lookup refresh token xxxxxx-%s record: %v", token[len(token)-6:], err)
+	} else if !exists {
+		return fmt.Errorf("refresh token xxxxxx-%s record does not exist", token[len(token)-6:])
+	}
+
+	// delete record
+	qry = `DELETE FROM refresh WHERE refresh_index = ?`
+	if err := s.sql.DeleteRecord(qry, index); err != nil {
+		return fmt.Errorf("failed to delete refresh token xxxxxx-%s record: %v", token[len(token)-6:], err)
+	}
+
 	return nil
 }
 
