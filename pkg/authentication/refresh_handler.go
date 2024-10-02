@@ -162,13 +162,13 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		}
 
 		// oppotunistically delete claimed refresh token
-		go func(id string) {
-			if err := h.authService.DestroyRefresh(id); err != nil {
-				h.logger.Error(fmt.Sprintf("failed to delete claimed refresh token record uuid %s", id), "err", err.Error())
+		go func(token string) {
+			if err := h.authService.DestroyRefresh(token); err != nil {
+				h.logger.Error(fmt.Sprintf("failed to delete claimed refresh token record uuid %s", refresh.Uuid), "err", err.Error())
 				return
 			}
-			h.logger.Info(fmt.Sprintf("deleted claimed refresh token record uuid %s", id))
-		}(refresh.Uuid)
+			h.logger.Info(fmt.Sprintf("deleted claimed refresh token record uuid %s", refresh.Uuid))
+		}(refresh.RefreshToken)
 
 		// respond with authorization data
 		authz := &provider.S2sAuthorization{
