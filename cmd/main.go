@@ -11,6 +11,13 @@ import (
 
 func main() {
 
+	// set logging to json format for application
+	jsonHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})
+	slog.SetDefault(slog.New(jsonHandler))
+
+	// set up logger for main
 	logger := slog.Default().With(slog.String(util.ComponentKey, util.ComponentMain))
 
 	// service definitions
@@ -18,7 +25,7 @@ func main() {
 		ServiceName: "ran",
 		Tls:         config.MutualTls,
 		Requires: config.Requires{
-			Client:           false,
+			S2sClient:        false,
 			Db:               true,
 			IndexKey:         true,
 			AesKey:           true,
@@ -26,6 +33,7 @@ func main() {
 			S2sVerifyingKey:  true,
 			UserSigningKey:   false,
 			UserVerifyingKey: false,
+			OauthRedirect:    false,
 		},
 	}
 
