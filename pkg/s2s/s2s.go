@@ -111,7 +111,7 @@ func New(config config.Config) (S2sAuthentication, error) {
 	cleanup := schedule.NewCleanup(repository)
 
 	return &s2sAuthentication{
-		congig:        config,
+		config:        config,
 		serverTls:     serverTlsConfig,
 		repository:    repository,
 		verifier:      verifier,
@@ -127,7 +127,7 @@ func New(config config.Config) (S2sAuthentication, error) {
 var _ S2sAuthentication = (*s2sAuthentication)(nil)
 
 type s2sAuthentication struct {
-	congig        config.Config
+	config        config.Config
 	serverTls     *tls.Config
 	repository    data.SqlRepository
 	verifier      jwt.Verifier
@@ -158,17 +158,17 @@ func (s2s *s2sAuthentication) Run() error {
 	mux.HandleFunc("/refresh", refreshHandler.HandleS2sRefresh)
 	mux.HandleFunc("/scopes", scopesHandler.GetActiveScopes)
 
-	ran := &connect.TlsServer{
-		Addr:      ":8444",
+	s2sServer := &connect.TlsServer{
+		Addr:      s2s.config.ServicePort,
 		Mux:       mux,
 		TlsConfig: s2s.serverTls,
 	}
 
 	go func() {
 
-		s2s.logger.Info(fmt.Sprintf("starting Ran s2s authentication service on %s...", ran.Addr[1:]))
-		if err := ran.Initialize(); err != http.ErrServerClosed {
-			s2s.logger.Error("failed to start Ran s2s authenticaiton service", "err", err.Error())
+		s2s.logger.Info(fmt.Sprintf("starting %s s2s authentication service on %s...", s2s.config.ServiceName, s2sServer.Addr[1:]))
+		if err := s2sServer.Initialize(); err != http.ErrServerClosed {
+			s2s.logger.Error(fmt.Sprintf("failed to start %s s2s authenticaiton service: %v", s2s.config.ServiceName, err.Error()))
 		}
 	}()
 

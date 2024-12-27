@@ -2,7 +2,7 @@
 
 docker build -t ran .
 
-docker run -p $(op read "op://world_site/ran_service_container_dev/port"):8443 \
+docker run -p $(op read "op://world_site/ran_service_container_dev/port"):$(op read "op://world_site/ran_service_container_dev/port") \
     -e RAN_SERVICE_CLIENT_ID=$(op read "op://world_site/ran_service_container_dev/client_id") \
     -e RAN_SERVICE_PORT=":$(op read "op://world_site/ran_service_container_dev/port")" \
     -e RAN_CA_CERT="$(op document get "service_ca_dev_cert" --vault world_site | base64 -w 0)" \
