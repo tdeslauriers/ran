@@ -6,7 +6,8 @@ CREATE TABLE client (
     created_at TIMESTAMP NOT NULL DEFAULT UTC_TIMESTAMP,
     enabled BOOLEAN NOT NULL,
     account_expired BOOLEAN NOT NULL,
-    account_locked BOOLEAN NOT NULL
+    account_locked BOOLEAN NOT NULL,
+    slug CHAR(36) NOT NULL
 );
 CREATE TABLE scope (
     uuid CHAR(36) PRIMARY KEY,
@@ -15,7 +16,8 @@ CREATE TABLE scope (
     scope_name VARCHAR(32) NOT NULL,
     description VARCHAR(64),
     created_at TIMESTAMP NOT NULL DEFAULT UTC_TIMESTAMP,
-    active BOOLEAN NOT NULL
+    active BOOLEAN NOT NULL,
+    slug CHAR(36) NOT NULL
 );
 CREATE INDEX idx_sevice_name ON scope(service_name);
 CREATE UNIQUE INDEX idx_scope ON scope(scope);
