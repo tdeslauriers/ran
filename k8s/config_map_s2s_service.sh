@@ -27,4 +27,3 @@ data:
   s2s-auth-port: ":$S2S_AUTH_PORT"
   s2s-auth-client-id: "$S2S_AUTH_CLIENT_ID"
 EOF
-

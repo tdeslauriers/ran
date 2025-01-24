@@ -19,5 +19,6 @@ docker run --rm -p $(op read "op://world_site/ran_service_container_dev/port"):$
     -e RAN_FIELD_LEVEL_AES_GCM_SECRET="$(op read "op://world_site/ran_aes_gcm_secret_dev/secret")" \
     -e RAN_S2S_JWT_SIGNING_KEY="$(op read "op://world_site/ran_jwt_key_pair_dev/signing_key")" \
     -e RAN_S2S_JWT_VERIFYING_KEY="$(op read "op://world_site/ran_jwt_key_pair_dev/verifying_key")" \
+    -e RAN_USER_JWT_VERIFYING_KEY="$(op read "op://world_site/shaw_jwt_key_pair_dev/verifying_key")" \
     ran:latest
 

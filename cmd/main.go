@@ -27,12 +27,12 @@ func main() {
 		Requires: config.Requires{
 			S2sClient:        false,
 			Db:               true,
-			IndexKey:         true,
-			AesKey:           true,
+			IndexSecret:      true,
+			AesSecret:        true,
 			S2sSigningKey:    true,
 			S2sVerifyingKey:  true,
 			UserSigningKey:   false,
-			UserVerifyingKey: false,
+			UserVerifyingKey: true,
 			OauthRedirect:    false,
 		},
 	}

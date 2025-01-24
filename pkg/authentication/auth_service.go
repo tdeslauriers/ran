@@ -99,7 +99,8 @@ func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, err
 			s.name,
 			s.description,
 			s.created_at,
-			s.active
+			s.active,
+			slug
 		FROM scope s 
 			LEFT JOIN client_scope cs ON s.uuid = cs.scope_uuid
 		WHERE cs.client_uuid = ?

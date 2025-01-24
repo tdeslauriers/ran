@@ -53,10 +53,10 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	var cmd types.S2sLoginCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
-		h.logger.Error("unable to decode json s2s login payload: %v", "err", err.Error())
+		h.logger.Error("failed to decode json s2s login payload: %v", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
-			Message:    "Unable to decode json s2s login payload.",
+			Message:    "Failed to decode json s2s login payload.",
 		}
 		e.SendJsonErr(w)
 		return
@@ -139,7 +139,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	// create token
 	token, err := h.authService.MintToken(claims)
 	if err != nil {
-		h.logger.Error("unable to mint s2s token: %v", "err", err.Error())
+		h.logger.Error("failed to mint s2s token: %v", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    loginFailedMsg,
@@ -190,10 +190,10 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(authz); err != nil {
-		h.logger.Error("unable to marshal/send s2s login response body: %v", "err", err.Error())
+		h.logger.Error("failed to marshal/send s2s login response body: %v", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
-			Message:    "unable to send s2s login response body due to interal service error",
+			Message:    "failed to send s2s login response body due to interal service error",
 		}
 		e.SendJsonErr(w)
 		return

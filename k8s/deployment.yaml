@@ -101,6 +101,11 @@ spec:
                 secretKeyRef:
                   name: secret-s2s-jwt-signing
                   key: jwt-verifying-key
+            - name: RAN_USER_JWT_VERIFYING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: secret-identity-jwt-signing
+                  key: jwt-verifying-key
           resources:
             limits:
               memory: "128Mi"
