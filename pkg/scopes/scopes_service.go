@@ -1,12 +1,15 @@
 package scopes
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"ran/internal/util"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
+	"github.com/tdeslauriers/carapace/pkg/validate"
 )
 
 // Service provides scopes service operations
@@ -17,6 +20,9 @@ type Service interface {
 
 	// GetActiveScopes returns all active scopes
 	GetActiveScopes() ([]types.Scope, error)
+
+	// GetScope returns a single scope by slug uuid
+	GetScope(slug string) (*types.Scope, error)
 }
 
 // NewSerivce creates a new scopes service interface abstracting a concrete implementation
@@ -85,4 +91,41 @@ func (a *service) GetActiveScopes() ([]types.Scope, error) {
 	}
 
 	return scopes, nil
+}
+
+// GetScope is a concrete impl of the Service interface method: returns a single scope by slug uuid
+func (s *service) GetScope(slug string) (*types.Scope, error) {
+
+	// validate slug is well formed uuid
+	if !validate.IsValidUuid(slug) {
+		errMsg := fmt.Sprintf("%s: '%s' not well-formed uuid", ErrInvalidSlug, slug)
+		s.logger.Error(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
+	// get scope record from db
+	var scope types.Scope
+	query := `SELECT
+				uuid,
+				service_name,
+				scope,
+				name,
+				description,
+				created_at,
+				active,
+				slug
+			FROM scope
+			WHERE slug = ?`
+	if err := s.sql.SelectRecord(query, &scope, slug); err != nil {
+		if err == sql.ErrNoRows {
+			errMsg := fmt.Sprintf("no scope found for slug %s", slug)
+			s.logger.Error(errMsg)
+			return nil, errors.New(errMsg)
+		}
+		errMsg := fmt.Sprintf("failed to retrieve scope '%s' record from db: %v", slug, err)
+		s.logger.Error(errMsg)
+		return nil, errors.New(errMsg)
+	}
+
+	return &scope, nil
 }

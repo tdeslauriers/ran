@@ -171,6 +171,7 @@ func (s *s2s) Run() error {
 	// scopes endpoint for users, ie, admin
 	mux.HandleFunc("/scopes", iamScopesHandler.HandleScopes)
 	mux.HandleFunc("/scopes/active", iamScopesHandler.HandleActiveScopes)
+	mux.HandleFunc("/scopes/", iamScopesHandler.HandleScope)
 
 	// scopes endpoint for users
 

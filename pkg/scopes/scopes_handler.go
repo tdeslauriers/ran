@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"ran/internal/util"
+	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
@@ -26,6 +27,9 @@ type Handler interface {
 
 	// HandleScopes returns all scopes, active or inactive
 	HandleScopes(w http.ResponseWriter, r *http.Request)
+
+	// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
+	HandleScope(w http.ResponseWriter, r *http.Request)
 
 	// HandleActiveScopes returns all active scopes
 	HandleActiveScopes(w http.ResponseWriter, r *http.Request)
@@ -120,10 +124,35 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	w.Write(scopesJson)
 }
 
+// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
+// concrete impl for the HandleScope method
+func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		h.handleGet(w, r)
+		return
+	case "PUT":
+		return
+	// case "POST":
+	// 	return
+	// case "DELETE":
+	// 	return
+	default:
+		h.logger.Error("only GET, PUT, POST, DELETE http methods allowed")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "only GET, PUT, POST, DELETE http methods allowed",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+}
+
 // s2s handler: meant for provideing data to services, not users, no identity jwt validation
 func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != "GET" {
+		h.logger.Error("only GET http method allowed")
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
 			Message:    "only GET http method allowed",
@@ -183,4 +212,99 @@ func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(scopesJson)
 
+}
+
+// handleGet handles GET requests for a single scope
+// concrete impl for the GET part of HandleScope method
+func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
+
+	// get slug param from request
+	segments := strings.Split(r.URL.Path, "/")
+
+	var slug string
+	if len(segments) > 1 {
+		slug = segments[len(segments)-1]
+	} else {
+		h.logger.Error("missing slug param in request")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "missing slug param in request",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// light weight input validation (not checking if slug is valid or well-formed)
+	if len(slug) < 16 || len(slug) > 64 {
+		h.logger.Error("invalid scope slug")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "invalid scope slug",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate s2s token
+	svcToken := r.Header.Get("Service-Authorization")
+	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
+	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedRead, svcToken); !authorized {
+		h.logger.Error(fmt.Sprintf("/scope/{scope} handler failed to validate s2s token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.S2s, err, w)
+		return
+	}
+
+	// validate user access token
+	usrToken := r.Header.Get("Authorization")
+	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedRead, usrToken); !authorized {
+		h.logger.Error(fmt.Sprintf("/scope/{scope} handler failed to validate user token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.User, err, w)
+		return
+	}
+
+	scope, err := h.svc.GetScope(slug)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to get scope %s: %v", slug, err.Error()))
+		h.HandleServiceError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(scope)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to encode scope to json: %v", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to encode scope to json",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+}
+
+func (h *handler) HandleServiceError(w http.ResponseWriter, err error) {
+
+	switch {
+	case strings.Contains(err.Error(), ErrInvalidSlug):
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    ErrInvalidSlug,
+		}
+		e.SendJsonErr(w)
+		return
+	case strings.Contains(err.Error(), ErrScopeNotFound):
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusNotFound,
+			Message:    ErrScopeNotFound,
+		}
+		e.SendJsonErr(w)
+		return
+	default:
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    err.Error(),
+		}
+		e.SendJsonErr(w)
+		return
+	}
 }
