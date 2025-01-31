@@ -23,6 +23,9 @@ type Service interface {
 
 	// GetScope returns a single scope by slug uuid
 	GetScope(slug string) (*types.Scope, error)
+
+	// UpdateScope updates a scope record
+	UpdateScope(scope *types.Scope) error
 }
 
 // NewSerivce creates a new scopes service interface abstracting a concrete implementation
@@ -128,4 +131,38 @@ func (s *service) GetScope(slug string) (*types.Scope, error) {
 	}
 
 	return &scope, nil
+}
+
+// UpdateScope is a concrete impl of the Service interface method: updates a scope record
+func (s *service) UpdateScope( scope *types.Scope) error {
+
+	// vadiate scope is not nil and is well formed
+	if scope == nil {
+		errMsg := "scope is nil"
+		s.logger.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	// redundant check, but good pratice
+	if err := scope.ValidateCmd(); err != nil {
+		errMsg := fmt.Sprintf("invalid scope: %v", err)
+		s.logger.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}		
+
+	// update scope record in db
+	query := `UPDATE 
+				scope SET
+					service_name = ?,
+					scope = ?,
+					name = ?,
+					description = ?,
+					active = ?
+			WHERE slug = ?`
+	if err := s.sql.UpdateRecord(query, scope.ServiceName, scope.Scope, scope.Name, scope.Description, scope.Active, scope.Slug); err != nil {
+		errMsg := fmt.Sprintf("failed to update scope record for slug %s: %v", scope.Slug, err)
+		s.logger.Error(errMsg)
+		return errors.New(errMsg)
+	}
+	return nil
 }

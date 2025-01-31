@@ -3,6 +3,7 @@ package scopes
 import (
 	"encoding/json"
 	"fmt"
+
 	"log/slog"
 	"net/http"
 	"ran/internal/util"
@@ -10,11 +11,13 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
+	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
 
 // service endpoints require s2s-only endpoint scopes
 var s2sAllowedRead []string = []string{"r:ran:s2s:scopes:*"}
-var s2sllowedWrite []string = []string{"w:ran:s2s:scopes:*"}
+
+// var s2sllowedWrite []string = []string{"w:ran:s2s:scopes:*"}
 
 // user endpoints require user endpoint scopes
 // NOTE: user-only endpoint scopes will issued to services when they are acting on behalf of a user,
@@ -28,11 +31,11 @@ type Handler interface {
 	// HandleScopes returns all scopes, active or inactive
 	HandleScopes(w http.ResponseWriter, r *http.Request)
 
-	// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
-	HandleScope(w http.ResponseWriter, r *http.Request)
-
 	// HandleActiveScopes returns all active scopes
 	HandleActiveScopes(w http.ResponseWriter, r *http.Request)
+
+	// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
+	HandleScope(w http.ResponseWriter, r *http.Request)
 }
 
 // NewS2sHandler creates a new handler for scopes requests from services,
@@ -124,30 +127,6 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	w.Write(scopesJson)
 }
 
-// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
-// concrete impl for the HandleScope method
-func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		h.handleGet(w, r)
-		return
-	case "PUT":
-		return
-	// case "POST":
-	// 	return
-	// case "DELETE":
-	// 	return
-	default:
-		h.logger.Error("only GET, PUT, POST, DELETE http methods allowed")
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "only GET, PUT, POST, DELETE http methods allowed",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-}
-
 // s2s handler: meant for provideing data to services, not users, no identity jwt validation
 func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
 
@@ -212,6 +191,32 @@ func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(scopesJson)
 
+}
+
+// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
+// concrete impl for the HandleScope method
+func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
+
+	switch r.Method {
+	case "GET":
+		h.handleGet(w, r)
+		return
+	case "PUT":
+		h.handlePut(w, r)
+		return
+	// case "POST":
+	// 	return
+	// case "DELETE":
+	// 	return
+	default:
+		h.logger.Error("only GET, PUT, POST, DELETE http methods allowed")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "only GET, PUT, POST, DELETE http methods allowed",
+		}
+		e.SendJsonErr(w)
+		return
+	}
 }
 
 // handleGet handles GET requests for a single scope
@@ -282,6 +287,151 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handlePut handles PUT requests for a single scope
+// concrete impl for the PUT part of HandleScope method
+func (h *handler) handlePut(w http.ResponseWriter, r *http.Request) {
+
+	// get slug param from request
+	segments := strings.Split(r.URL.Path, "/")
+
+	var slug string
+	if len(segments) > 1 {
+		slug = segments[len(segments)-1]
+	} else {
+		h.logger.Error("missing slug param in request")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "missing slug param in request",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// light weight input validation (not checking if slug is valid or well-formed)
+	if len(slug) < 16 || len(slug) > 64 {
+		h.logger.Error("invalid scope slug")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "invalid scope slug",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate s2s token
+	svcToken := r.Header.Get("Service-Authorization")
+	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
+	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
+		h.logger.Error(fmt.Sprintf("/scope/{scope} handler failed to validate s2s token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.S2s, err, w)
+		return
+	}
+
+	// validate user access token
+	userToken := r.Header.Get("Authorization")
+	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, userToken); !authorized {
+		h.logger.Error(fmt.Sprintf("/scope/{scope} handler failed to validate user token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.User, err, w)
+		return
+	}
+
+	// get cmd from request body
+	var cmd types.Scope
+	err := json.NewDecoder(r.Body).Decode(&cmd)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to decode scope from request body: %v", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "failed to decode scope from request body",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate scope
+	if err := cmd.ValidateCmd(); err != nil {
+		h.logger.Error(fmt.Sprintf("failed to validate scope: %v", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusUnprocessableEntity,
+			Message:    fmt.Sprintf("failed to validate scope: %v", err.Error()),
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// look up scope by slug --> and error if bad scope
+	scope, err := h.svc.GetScope(slug)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to get scope %s for update: %v", slug, err.Error()))
+		h.HandleServiceError(w, err)
+		return
+	}
+
+	// prepare updated scope
+	updated := &types.Scope{
+		Uuid:        scope.Uuid, // not allowed to update uuid
+		ServiceName: cmd.ServiceName,
+		Scope:       cmd.Scope,
+		Name:        cmd.Name,
+		Description: cmd.Description,
+		Active:      cmd.Active,
+		Slug:        slug,
+	}
+
+	// update scope
+	err = h.svc.UpdateScope(updated)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to update scope %s: %v", slug, err.Error()))
+		h.HandleServiceError(w, err)
+		return
+	}
+
+	jot, err := jwt.BuildFromToken(strings.TrimPrefix(userToken, "Bearer "))
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to parse jwt token: %s", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to parse jwt token",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// log updates
+	if cmd.ServiceName != scope.ServiceName {
+		h.logger.Info(fmt.Sprintf("service name updated from %s to %s by %s", scope.ServiceName, cmd.ServiceName, jot.Claims.Subject))
+	}
+
+	if cmd.Scope != scope.Scope {
+		h.logger.Info(fmt.Sprintf("scope updated from %s to %s by %s", scope.Scope, cmd.Scope, jot.Claims.Subject))
+	}
+
+	if cmd.Name != scope.Name {
+		h.logger.Info(fmt.Sprintf("name updated from %s to %s by %s", scope.Name, cmd.Name, jot.Claims.Subject))
+	}
+
+	if cmd.Description != scope.Description {
+		h.logger.Info(fmt.Sprintf("description updated from %s to %s by %s", scope.Description, cmd.Description, jot.Claims.Subject))
+	}
+
+	if cmd.Active != scope.Active {
+		h.logger.Info(fmt.Sprintf("active updated from %t to %t by %s", scope.Active, cmd.Active, jot.Claims.Subject))
+	}
+
+	// respond with updated scope
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(updated); err != nil {
+		h.logger.Error(fmt.Sprintf("failed to encode updated scope to json: %v", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to encode updated scope to json",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+}
+
 func (h *handler) HandleServiceError(w http.ResponseWriter, err error) {
 
 	switch {
@@ -289,6 +439,13 @@ func (h *handler) HandleServiceError(w http.ResponseWriter, err error) {
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    ErrInvalidSlug,
+		}
+		e.SendJsonErr(w)
+		return
+	case strings.Contains(err.Error(), "invalid"):
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusUnprocessableEntity,
+			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return
