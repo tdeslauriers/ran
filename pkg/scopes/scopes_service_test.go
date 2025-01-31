@@ -48,6 +48,102 @@ func TestGetScope(t *testing.T) {
 	}
 }
 
+func TestUpdateScope(t *testing.T) {
+	testCases := []struct {
+		name  string
+		scope *types.Scope
+		err   error
+	}{
+		{
+			name: "valid scope",
+			scope: &types.Scope{
+				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
+				ServiceName: "real-service",
+				Scope:       "r:shaw:*",
+				Name:        "shaw",
+				Description: "shaw scope",
+				CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+				Active:      true,
+				Slug:        ValidScopeSlug,
+			},
+			err: nil,
+		},
+		{
+			name:  "fail nil scope",
+			scope: nil,
+			err:   errors.New("scope is nil"),
+		},
+		{
+			name: "invalid slug",
+			scope: &types.Scope{
+				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
+				ServiceName: "real-service",
+				Scope:       "r:shaw:*",
+				Name:        "shaw",
+				Description: "shaw scope",
+				CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+				Active:      true,
+				Slug:        "invalid-slug",
+			},
+			err: errors.New(ErrInvalidSlug),
+		},
+
+		{
+			name: "fail invalid service name",
+			scope: &types.Scope{
+				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
+				ServiceName: "SERVICE",
+				Scope:       "r:shaw:*",
+				Name:        "shaw",
+				Description: "shaw scope",
+				CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+				Active:      true,
+				Slug:        ValidScopeSlug,
+			},
+			err: errors.New("invalid scope: invalid service name"),
+		},
+		{
+			name: "fail invalid scope",
+			scope: &types.Scope{
+				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
+				ServiceName: "real-service",
+				Scope:       "r:sh",
+				Name:        "shaw",
+				Description: "shaw scope",
+				CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+				Active:      true,
+				Slug:        ValidScopeSlug,
+			},
+			err: errors.New("invalid scope: invalid scope"),
+		},
+		{
+			name: "scope not found",
+			scope: &types.Scope{
+				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
+				ServiceName: "real-service",
+				Scope:       "r:shaw:*",
+				Name:        "shaw",
+				Description: "shaw scope",
+				CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+				Active:      true,
+				Slug:        "9473a064-5cbb-48f2-92ba-ea896dd68aed", // random uuid
+			},
+			err: errors.New(ErrScopeNotFound),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewSerivce(&mockSqlRepository{})
+			err := s.UpdateScope(tc.scope)
+
+			if err != nil && !strings.Contains(err.Error(), tc.err.Error()) {
+				t.Errorf("expected error: %s, got: %s", tc.err, err)
+			}
+		})
+	}
+}
+
 type mockSqlRepository struct {
 }
 
@@ -80,6 +176,11 @@ func (m *mockSqlRepository) InsertRecord(query string, record interface{}) error
 
 	return nil
 }
-func (m *mockSqlRepository) UpdateRecord(query string, args ...interface{}) error { return nil }
+func (m *mockSqlRepository) UpdateRecord(query string, args ...interface{}) error {
+	if args[5] == "9473a064-5cbb-48f2-92ba-ea896dd68aed" {
+		return errors.New(ErrScopeNotFound)
+	}
+	return nil
+}
 func (m *mockSqlRepository) DeleteRecord(query string, args ...interface{}) error { return nil }
 func (m *mockSqlRepository) Close() error                                         { return nil }

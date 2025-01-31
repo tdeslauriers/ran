@@ -48,7 +48,7 @@ func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceKey)).
+			With(slog.String(util.ServiceKey, util.ServiceS2s)).
 			With(slog.String(util.PackageKey, util.PackageScopes)).
 			With(slog.String(util.ComponentKey, util.ComponentScopes)),
 	}
@@ -201,11 +201,11 @@ func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
 	case "GET":
 		h.handleGet(w, r)
 		return
-	case "PUT":
-		h.handlePut(w, r)
-		return
-	// case "POST":
+	// case "PUT":
 	// 	return
+	case "POST":
+		h.handlePost(w, r)
+		return
 	// case "DELETE":
 	// 	return
 	default:
@@ -287,9 +287,9 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePut handles PUT requests for a single scope
+// handlePost handles PUT requests for a single scope
 // concrete impl for the PUT part of HandleScope method
-func (h *handler) handlePut(w http.ResponseWriter, r *http.Request) {
+func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// get slug param from request
 	segments := strings.Split(r.URL.Path, "/")
@@ -399,19 +399,19 @@ func (h *handler) handlePut(w http.ResponseWriter, r *http.Request) {
 
 	// log updates
 	if cmd.ServiceName != scope.ServiceName {
-		h.logger.Info(fmt.Sprintf("service name updated from %s to %s by %s", scope.ServiceName, cmd.ServiceName, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("service name updated from '%s' to '%s' by %s", scope.ServiceName, cmd.ServiceName, jot.Claims.Subject))
 	}
 
 	if cmd.Scope != scope.Scope {
-		h.logger.Info(fmt.Sprintf("scope updated from %s to %s by %s", scope.Scope, cmd.Scope, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("scope updated from '%s' to '%s' by %s", scope.Scope, cmd.Scope, jot.Claims.Subject))
 	}
 
 	if cmd.Name != scope.Name {
-		h.logger.Info(fmt.Sprintf("name updated from %s to %s by %s", scope.Name, cmd.Name, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("name updated from '%s' to '%s' by %s", scope.Name, cmd.Name, jot.Claims.Subject))
 	}
 
 	if cmd.Description != scope.Description {
-		h.logger.Info(fmt.Sprintf("description updated from %s to %s by %s", scope.Description, cmd.Description, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("description updated from '%s' to '%s' by %s", scope.Description, cmd.Description, jot.Claims.Subject))
 	}
 
 	if cmd.Active != scope.Active {

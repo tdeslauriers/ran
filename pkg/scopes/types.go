@@ -3,7 +3,7 @@ package scopes
 const (
 
 	// 400
-	ErrInvalidSlug string = "invalid slug provided"
+	ErrInvalidSlug string = "invalid slug"
 
 	//404
 	ErrScopeNotFound string = "scope not found"
