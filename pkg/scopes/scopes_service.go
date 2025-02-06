@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"ran/internal/util"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/carapace/pkg/validate"
@@ -23,6 +25,9 @@ type Service interface {
 
 	// GetScope returns a single scope by slug uuid
 	GetScope(slug string) (*types.Scope, error)
+
+	// AddScope adds a new scope record
+	AddScope(scope *types.Scope) (*types.Scope, error)
 
 	// UpdateScope updates a scope record
 	UpdateScope(scope *types.Scope) error
@@ -133,8 +138,69 @@ func (s *service) GetScope(slug string) (*types.Scope, error) {
 	return &scope, nil
 }
 
+// AddScope is a concrete impl of the Service interface method: adds a new scope record
+func (s *service) AddScope(scope *types.Scope) (*types.Scope, error) {
+
+	// validate scope is not nil and is well formed
+	if scope == nil {
+		errMsg := "scope is nil"
+		s.logger.Error(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
+	// redundant check (should be checked in handler), but good pratice
+	if err := scope.ValidateCmd(); err != nil {
+		errMsg := fmt.Sprintf("invalid scope: %v", err)
+		s.logger.Error(errMsg)
+		return nil, fmt.Errorf(errMsg)
+	}
+
+	// generate uuid for scope
+	id, err := uuid.NewRandom()
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to generate uuid for scope: %v", err)
+		s.logger.Error(errMsg)
+		return nil, errors.New(errMsg)
+	}
+	scope.Uuid = id.String()
+
+	// generate slug for scope
+	slug, err := uuid.NewRandom()
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to generate slug for scope: %v", err)
+		s.logger.Error(errMsg)
+		return nil, errors.New(errMsg)
+	}
+	scope.Slug = slug.String()
+
+	// set created_at timestamp
+	now := time.Now().UTC()
+	scope.CreatedAt = now.Format("2006-01-02 15:04:05")
+
+	// add scope record to db
+	query := `INSERT INTO 
+				scope (
+					uuid, 
+					service_name, 
+					scope, 
+					name, 
+					description, 
+					created_at,
+					active,
+					slug
+				) 
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	if err := s.sql.InsertRecord(query, *scope); err != nil {
+		errMsg := fmt.Sprintf("failed to insert scope record: %v", err)
+		s.logger.Error(errMsg)
+		return nil, errors.New(errMsg)
+	}
+
+	return scope, nil
+}
+
 // UpdateScope is a concrete impl of the Service interface method: updates a scope record
-func (s *service) UpdateScope( scope *types.Scope) error {
+func (s *service) UpdateScope(scope *types.Scope) error {
 
 	// vadiate scope is not nil and is well formed
 	if scope == nil {
@@ -148,7 +214,7 @@ func (s *service) UpdateScope( scope *types.Scope) error {
 		errMsg := fmt.Sprintf("invalid scope: %v", err)
 		s.logger.Error(errMsg)
 		return fmt.Errorf(errMsg)
-	}		
+	}
 
 	// update scope record in db
 	query := `UPDATE 

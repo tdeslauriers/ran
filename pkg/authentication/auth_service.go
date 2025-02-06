@@ -57,20 +57,21 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 			created_at, 
 			enabled, 
 			account_expired, 
-			account_locked 
+			account_locked, 
+			slug
 		FROM client 
 		WHERE uuid = ?`
 	if err := s.sql.SelectRecord(qry, &s2sClient, clientId); err != nil {
-		s.logger.Error("unable to retrieve s2s client record", "err", err.Error())
-		return errors.New("unable to retrieve s2s client record")
+		s.logger.Error("failed to retrieve s2s client record", "err", err.Error())
+		return errors.New("failed to retrieve s2s client record")
 	}
 
 	// validate password
 	secret := []byte(clientSecret)
 	hash := []byte(s2sClient.Password)
 	if err := bcrypt.CompareHashAndPassword(hash, secret); err != nil {
-		s.logger.Error("unable to validate password", "err", err.Error())
-		return errors.New("unable to validate password")
+		s.logger.Error("failed to validate password", "err", err.Error())
+		return errors.New("failed to validate password")
 	}
 
 	if !s2sClient.Enabled {
@@ -106,8 +107,8 @@ func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, err
 		WHERE cs.client_uuid = ?
 			AND s.service_name = ?`
 	if err := s.sql.SelectRecords(qry, &scopes, clientId, service); err != nil {
-		s.logger.Error(fmt.Sprintf("unable to retrieve scopes for client %s", clientId), "err", err.Error())
-		return scopes, fmt.Errorf("unable to retrieve scopes for client %s", clientId)
+		s.logger.Error(fmt.Sprintf("failed to retrieve scopes for client %s", clientId), "err", err.Error())
+		return scopes, fmt.Errorf("failed to retrieve scopes for client %s", clientId)
 	}
 
 	return scopes, nil

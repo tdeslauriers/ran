@@ -3,6 +3,7 @@ package util
 const (
 	PackageKey = "pkg"
 
+	PackageClients        = "clients"
 	PackageScopes         = "scopes"
 	PackageS2s            = "s2s"
 	PackageAuthentication = "authentication"
@@ -15,6 +16,7 @@ const (
 	ComponentLogin   = "login"
 	ComponentRefresh = "refresh"
 	ComponentScopes  = "scopes"
+	ComponentClients = "s2s servivce clients"
 
 	ServiceKey = "service"
 

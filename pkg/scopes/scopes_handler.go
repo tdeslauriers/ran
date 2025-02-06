@@ -34,6 +34,9 @@ type Handler interface {
 	// HandleActiveScopes returns all active scopes
 	HandleActiveScopes(w http.ResponseWriter, r *http.Request)
 
+	// HandleAdd handles requests to add a new scope
+	HandleAdd(w http.ResponseWriter, r *http.Request)
+
 	// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
 	HandleScope(w http.ResponseWriter, r *http.Request)
 }
@@ -193,17 +196,94 @@ func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// HandleAdd handles requests to add a new scope
+// concrete impl for the HandleAdd method
+func (h *handler) HandleAdd(w http.ResponseWriter, r *http.Request) {
+
+	// validate http method
+	if r.Method != "POST" {
+		h.logger.Error("only POST http method allowed")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "only POST http method allowed",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate s2s token
+	svcToken := r.Header.Get("Service-Authorization")
+	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
+		h.logger.Error(fmt.Sprintf("/scopes/add handler failed to validate s2s token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.S2s, err, w)
+		return
+	}
+
+	// validate user access token
+	usrToken := r.Header.Get("Authorization")
+	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, usrToken); !authorized {
+		h.logger.Error(fmt.Sprintf("/scopes/add handler failed to validate user token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.User, err, w)
+		return
+	}
+
+	// get cmd from request body
+	var cmd types.Scope
+	err := json.NewDecoder(r.Body).Decode(&cmd)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to decode scope from request body: %v", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "failed to decode scope from request body",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate scope
+	if err := cmd.ValidateCmd(); err != nil {
+		h.logger.Error(fmt.Sprintf("failed to validate scope: %v", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusUnprocessableEntity,
+			Message:    fmt.Sprintf("failed to validate scope: %v", err.Error()),
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// add scope
+	scope, err := h.svc.AddScope(&cmd)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to add scope: %v", err.Error()))
+		h.HandleServiceError(w, err)
+		return
+	}
+
+	// respond 201
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(scope); err != nil {
+		h.logger.Error(fmt.Sprintf("failed to encode scope to json: %v", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to encode scope to json",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+}
+
 // HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
 // concrete impl for the HandleScope method
 func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
-	case "GET":
+	case http.MethodGet:
 		h.handleGet(w, r)
 		return
 	// case "PUT":
 	// 	return
-	case "POST":
+	case http.MethodPost:
 		h.handlePost(w, r)
 		return
 	// case "DELETE":
@@ -254,7 +334,7 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	svcToken := r.Header.Get("Service-Authorization")
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
 	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedRead, svcToken); !authorized {
-		h.logger.Error(fmt.Sprintf("/scope/{scope} handler failed to validate s2s token: %v", err.Error()))
+		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
@@ -262,7 +342,7 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
 	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedRead, usrToken); !authorized {
-		h.logger.Error(fmt.Sprintf("/scope/{scope} handler failed to validate user token: %v", err.Error()))
+		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}

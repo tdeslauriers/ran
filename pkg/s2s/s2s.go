@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"ran/internal/util"
 	"ran/pkg/authentication"
+	"ran/pkg/clients"
 	"ran/pkg/scopes"
 
 	"github.com/tdeslauriers/carapace/pkg/config"
@@ -109,18 +110,22 @@ func New(config config.Config) (S2s, error) {
 	// scopes service
 	scopesService := scopes.NewSerivce(repository)
 
+	// clients service
+	clientsService := clients.NewService(repository)
+
 	// clean up: database
 	cleanup := schedule.NewCleanup(repository)
 
 	return &s2s{
-		config:        config,
-		serverTls:     serverTlsConfig,
-		repository:    repository,
-		s2sVerifier:   s2sVerifier,
-		iamVerifier:   iamVerifier,
-		authService:   s2sAuthService,
-		scopesService: scopesService,
-		cleanup:       cleanup,
+		config:         config,
+		serverTls:      serverTlsConfig,
+		repository:     repository,
+		s2sVerifier:    s2sVerifier,
+		iamVerifier:    iamVerifier,
+		authService:    s2sAuthService,
+		scopesService:  scopesService,
+		clientsService: clientsService,
+		cleanup:        cleanup,
 
 		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentS2s)),
 	}, nil
@@ -130,14 +135,15 @@ func New(config config.Config) (S2s, error) {
 var _ S2s = (*s2s)(nil)
 
 type s2s struct {
-	config        config.Config
-	serverTls     *tls.Config
-	repository    data.SqlRepository
-	s2sVerifier   jwt.Verifier
-	iamVerifier   jwt.Verifier
-	authService   types.S2sAuthService
-	scopesService scopes.Service
-	cleanup       schedule.Cleanup
+	config         config.Config
+	serverTls      *tls.Config
+	repository     data.SqlRepository
+	s2sVerifier    jwt.Verifier
+	iamVerifier    jwt.Verifier
+	authService    types.S2sAuthService
+	scopesService  scopes.Service
+	clientsService clients.Service
+	cleanup        schedule.Cleanup
 
 	logger *slog.Logger
 }
@@ -157,6 +163,8 @@ func (s *s2s) Run() error {
 	s2sScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, nil) // user jwt verifier not needed
 	iamScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, s.iamVerifier)
 
+	clientHanlder := clients.NewHandler(s.clientsService, s.s2sVerifier, s.iamVerifier)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", diagnostics.HealthCheckHandler)
 
@@ -171,9 +179,11 @@ func (s *s2s) Run() error {
 	// scopes endpoint for users, ie, admin
 	mux.HandleFunc("/scopes", iamScopesHandler.HandleScopes)
 	mux.HandleFunc("/scopes/active", iamScopesHandler.HandleActiveScopes)
+	mux.HandleFunc("/scopes/add", iamScopesHandler.HandleAdd)
 	mux.HandleFunc("/scopes/", iamScopesHandler.HandleScope)
 
-	// scopes endpoint for users
+	mux.HandleFunc("/clients", clientHanlder.HandleClients)
+	mux.HandleFunc("/clients/", clientHanlder.HandleClient)
 
 	s2sServer := &connect.TlsServer{
 		Addr:      s.config.ServicePort,
