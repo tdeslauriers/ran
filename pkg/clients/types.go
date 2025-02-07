@@ -66,12 +66,12 @@ type ClientScope struct {
 	AccountLocked   bool            `json:"account_locked" db:"account_locked"`
 	CLientSlug      string          `json:"client_slug,omitempty" db:"slug"`
 
-	ScopeId     string `db:"scope_id" json:"scope_id,omitempty"`
-	ServiceName string `db:"service_name" json:"service_name"`
-	Scope       string `db:"scope" json:"scope"`
-	ScopeName   string `db:"scope_name"  json:"name"`
-	Description string `db:"description" json:"description"`
-	ScopeCreatedAt   string `db:"scope_created_at" json:"created_at"`
-	Active      bool   `db:"active" json:"active"`
-	ScopeSlug   string `db:"scope_slug" json:"slug,omitempty"`
+	ScopeId        string `db:"scope_id" json:"scope_id,omitempty"`
+	ServiceName    string `db:"service_name" json:"service_name"`
+	Scope          string `db:"scope" json:"scope"`
+	ScopeName      string `db:"scope_name"  json:"name"`
+	Description    string `db:"description" json:"description"`
+	ScopeCreatedAt string `db:"scope_created_at" json:"created_at"`
+	Active         bool   `db:"active" json:"active"`
+	ScopeSlug      string `db:"scope_slug" json:"slug,omitempty"`
 }

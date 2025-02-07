@@ -217,7 +217,8 @@ func (s *service) UpdateScope(scope *types.Scope) error {
 	}
 
 	// update scope record in db
-	query := `UPDATE 
+	query := `
+			UPDATE 
 				scope SET
 					service_name = ?,
 					scope = ?,
@@ -230,5 +231,6 @@ func (s *service) UpdateScope(scope *types.Scope) error {
 		s.logger.Error(errMsg)
 		return errors.New(errMsg)
 	}
+
 	return nil
 }

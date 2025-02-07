@@ -20,6 +20,9 @@ type Service interface {
 
 	// GetClient returns a single service client (and it's assigned scopes) from a slug
 	GetClient(slug string) (*profile.Client, error)
+
+	// UpdateClient updates a service client record (doesn not include password updates/resets)
+	UpdateClient(client *Client) error
 }
 
 // NewService creates a new clients service interface abstracting a concrete implementation
@@ -89,19 +92,19 @@ func (s *service) GetClient(slug string) (*profile.Client, error) {
 				c.account_expired,
 				c.account_locked,
 				c.slug AS client_slug,
-				s.uuid AS scope_id,
-				s.service_name,
-				s.scope,
-				s.name AS scope_name,
-				s.description,
-				s.created_at AS scope_created_at,
-				s.active,
-				s.slug AS scope_slug
+				COALESCE(s.uuid, '') AS scope_id,
+				COALESCE(s.service_name, '') AS service_name,
+				COALESCE(s.scope, '') AS scope,
+				COALESCE(s.name, '') AS scope_name,
+				COALESCE(s.description, '') AS description,
+				COALESCE(s.created_at, '') AS scope_created_at,
+				COALESCE(s.active, FALSE) AS active,
+				COALESCE(s.slug, '') AS scope_slug
 			FROM client c
 				LEFT OUTER JOIN client_scope cs ON c.uuid = cs.client_uuid
 				LEFT OUTER JOIN scope s ON cs.scope_uuid = s.uuid
 			WHERE c.slug = ?`
-	if err := s.sql.SelectRecord(query, &clientScope, slug); err != nil {
+	if err := s.sql.SelectRecords(query, &clientScope, slug); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("service client not found for slug: %s", slug)
 		}
@@ -122,6 +125,13 @@ func (s *service) GetClient(slug string) (*profile.Client, error) {
 
 	// build scopes from db records slice
 	for _, cs := range clientScope {
+		// emtpy scope id means no scope(s) assigned to service client
+		// id will be empty (instead of null: null causes reflection err)
+		// because of the coalesce syntax in the query
+		if cs.ScopeId == "" {
+			continue
+		}
+
 		client.Scopes = append(client.Scopes, types.Scope{
 			Uuid:        cs.ScopeId,
 			ServiceName: cs.ServiceName,
@@ -135,4 +145,37 @@ func (s *service) GetClient(slug string) (*profile.Client, error) {
 	}
 
 	return &client, nil
+}
+
+// UpdateClient is a concrete impl of the Service interface method: updates a service client record
+func (s *service) UpdateClient(client *Client) error {
+
+	// validate client is not nil
+	if client == nil {
+		return fmt.Errorf("service client is required")
+	}
+
+	// validate client fields
+	// redundant, but good practice
+	if err := client.Validate(); err != nil {
+		return fmt.Errorf("invalid service client: %v", err)
+	}
+
+	// update client record
+	query := `
+			UPDATE 
+				client SET
+					name = ?,
+					owner = ?,
+					enabled = ?,
+					account_expired = ?,
+					account_locked = ?
+			WHERE slug = ?`
+	if err := s.sql.UpdateRecord(query, client.Name, client.Owner, client.Enabled, client.AccountExpired, client.AccountLocked, client.Slug); err != nil {
+		errMsg := fmt.Sprintf("failed to update service client record for slug %s: %v", client.Slug, err)
+		s.logger.Error(errMsg)
+		return fmt.Errorf(errMsg)
+	}
+
+	return nil
 }

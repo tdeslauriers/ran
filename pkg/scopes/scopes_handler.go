@@ -402,7 +402,7 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	svcToken := r.Header.Get("Service-Authorization")
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
 	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
-		h.logger.Error(fmt.Sprintf("/scope/{scope} handler failed to validate s2s token: %v", err.Error()))
+		h.logger.Error(fmt.Sprintf("post /scope/{slug} handler failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
@@ -410,7 +410,7 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	// validate user access token
 	userToken := r.Header.Get("Authorization")
 	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, userToken); !authorized {
-		h.logger.Error(fmt.Sprintf("/scope/{scope} handler failed to validate user token: %v", err.Error()))
+		h.logger.Error(fmt.Sprintf("post /scope/{slug} handler failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
@@ -454,8 +454,9 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 		Scope:       cmd.Scope,
 		Name:        cmd.Name,
 		Description: cmd.Description,
+		CreatedAt:   scope.CreatedAt, // not allowed to update created_at
 		Active:      cmd.Active,
-		Slug:        slug,
+		Slug:        scope.Slug, // not allowed to update slug
 	}
 
 	// update scope
