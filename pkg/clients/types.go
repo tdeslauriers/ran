@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/validate"
 )
 
@@ -11,7 +12,69 @@ const (
 	ErrInvalidSlug    = "invalid service client slug"
 	ErrInvalidClient  = "invalid service client"
 	ErrClientNotFound = "service client not found"
+
+	ErrInvalidResourceId = "invalid resource id"
+	ErrInvalidCurrentPw  = "invalid current password"
+	ErrInvalidNewPw      = "invalid new password"
+	ErrInvalidPwMismatch = "new password and confirm password do not match"
+
+	ErrIncorrectPassword = "incorrect password"
 )
+
+// service endpoints require s2s-only endpoint scopes
+var s2sAllowedRead []string = []string{"r:ran:s2s:clients:*"}
+
+// user endpoints require user endpoint scopes
+// NOTE: user-only endpoint scopes will issued to services when they are acting on behalf of a user,
+// but in those cases, their must be a user token present in the request ALSO.
+var userAllowedRead = []string{"r:ran:clients:*"}
+var userAllowedWrite = []string{"w:ran:clients:*"}
+
+// Handler provides http handlers for service client requests
+type Handler interface {
+	ClientHandler
+	ResetHandler
+}
+
+// NewHandler creates a new service client Handler interface abstracting a concrete implementations
+func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
+	return &handler{
+		ClientHandler: NewClientHandler(s, s2s, iam),
+		ResetHandler:  NewResetHandler(s, s2s, iam),
+	}
+}
+
+var _ Handler = (*handler)(nil)
+
+// handler is a concrete implementation of the Handler interface abstracting smaller interfaces
+type handler struct {
+	ClientHandler
+	ResetHandler
+}
+
+type Service interface {
+	ClientService
+	ResetService
+	ClientErrService
+}
+
+// NewService creates a new service interface abstracting a concrete implementations of
+// the ClientService and ClientErrService interfaces
+func NewService(sql data.SqlRepository) Service {
+	return &service{
+		ClientService:    NewClientService(sql),
+		ResetService:     NewResetService(sql),
+		ClientErrService: NewErrHandlingService(),
+	}
+}
+
+var _ Service = (*service)(nil)
+
+type service struct {
+	ClientService
+	ResetService
+	ClientErrService
+}
 
 type Client struct {
 	Id             string          `json:"id,omitempty" db:"uuid"`
@@ -53,6 +116,12 @@ func (c *Client) Validate() error {
 	}
 
 	return nil
+}
+
+// Reset is a model for a service client uuid and pw for lookup by reset service
+type Reset struct {
+	ClientId string `db:"uuid"`
+	Password string `db:"password"`
 }
 
 // ClientScope is a model for a database join query of a client and its associated scopes

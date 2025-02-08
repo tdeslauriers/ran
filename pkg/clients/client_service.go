@@ -12,8 +12,8 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/validate"
 )
 
-// Service provides clients service operations
-type Service interface {
+// ClientService provides clients service operations
+type ClientService interface {
 
 	// GetClients returns all service clients, active or inactive
 	GetClients() ([]Client, error)
@@ -25,9 +25,9 @@ type Service interface {
 	UpdateClient(client *Client) error
 }
 
-// NewService creates a new clients service interface abstracting a concrete implementation
-func NewService(sql data.SqlRepository) Service {
-	return &service{
+// NewClientService creates a new clients service interface abstracting a concrete implementation
+func NewClientService(sql data.SqlRepository) ClientService {
+	return &clientService{
 		sql: sql,
 
 		logger: slog.Default().
@@ -37,17 +37,17 @@ func NewService(sql data.SqlRepository) Service {
 	}
 }
 
-var _ Service = (*service)(nil)
+var _ ClientService = (*clientService)(nil)
 
-// service is a concrete implementation of the Service interface
-type service struct {
+// clientService is a concrete implementation of the Service interface
+type clientService struct {
 	sql data.SqlRepository
 
 	logger *slog.Logger
 }
 
 // GetClients is a concrete impl of the Service interface method: returns all clients, active or inactive
-func (s *service) GetClients() ([]Client, error) {
+func (s *clientService) GetClients() ([]Client, error) {
 
 	var clients []Client
 	query := `
@@ -70,7 +70,7 @@ func (s *service) GetClients() ([]Client, error) {
 }
 
 // GetClient is a concrete impl of the Service interface method: returns a single client from a slug
-func (s *service) GetClient(slug string) (*profile.Client, error) {
+func (s *clientService) GetClient(slug string) (*profile.Client, error) {
 
 	// validate input
 	if slug == "" {
@@ -148,7 +148,7 @@ func (s *service) GetClient(slug string) (*profile.Client, error) {
 }
 
 // UpdateClient is a concrete impl of the Service interface method: updates a service client record
-func (s *service) UpdateClient(client *Client) error {
+func (s *clientService) UpdateClient(client *Client) error {
 
 	// validate client is not nil
 	if client == nil {

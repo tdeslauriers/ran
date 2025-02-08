@@ -183,6 +183,7 @@ func (s *s2s) Run() error {
 	mux.HandleFunc("/scopes/", iamScopesHandler.HandleScope)
 
 	mux.HandleFunc("/clients", clientHanlder.HandleClients)
+	mux.HandleFunc("/clients/reset", clientHanlder.HandleReset)
 	mux.HandleFunc("/clients/", clientHanlder.HandleClient)
 
 	s2sServer := &connect.TlsServer{

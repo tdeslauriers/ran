@@ -13,17 +13,8 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/profile"
 )
 
-// service endpoints require s2s-only endpoint scopes
-var s2sAllowedRead []string = []string{"r:ran:s2s:clients:*"}
-
-// user endpoints require user endpoint scopes
-// NOTE: user-only endpoint scopes will issued to services when they are acting on behalf of a user,
-// but in those cases, their must be a user token present in the request ALSO.
-var userAllowedRead = []string{"r:ran:clients:*"}
-var userAllowedWrite = []string{"w:ran:clients:*"}
-
-// Handler provides http handlers for client (model) requests
-type Handler interface {
+// ClientHandler provides http handlers for client (model) requests
+type ClientHandler interface {
 
 	// HandleClients returns all clients
 	HandleClients(w http.ResponseWriter, r *http.Request)
@@ -32,9 +23,9 @@ type Handler interface {
 	HandleClient(w http.ResponseWriter, r *http.Request)
 }
 
-// NewHandler creates a new client handler
-func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
-	return &handler{
+// NewClientHandler creates a new client handler
+func NewClientHandler(s Service, s2s, iam jwt.Verifier) ClientHandler {
+	return &clientHandler{
 		service:     s,
 		s2sVerifier: s2s,
 		iamVerifier: iam,
@@ -46,9 +37,9 @@ func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
 	}
 }
 
-var _ Handler = (*handler)(nil)
+var _ ClientHandler = (*clientHandler)(nil)
 
-type handler struct {
+type clientHandler struct {
 	service     Service
 	s2sVerifier jwt.Verifier
 	iamVerifier jwt.Verifier
@@ -58,7 +49,7 @@ type handler struct {
 
 // HandleClients returns all clients
 // concrete impl of the Handler interface method
-func (h *handler) HandleClients(w http.ResponseWriter, r *http.Request) {
+func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed on /clients endpoint", http.StatusMethodNotAllowed)
@@ -120,7 +111,7 @@ func (h *handler) HandleClients(w http.ResponseWriter, r *http.Request) {
 
 // HandleClient handles all requests for a single client: GET, POST, PUT, DELETE
 // concrete impl of the Handler interface method
-func (h *handler) HandleClient(w http.ResponseWriter, r *http.Request) {
+func (h *clientHandler) HandleClient(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
@@ -143,7 +134,7 @@ func (h *handler) HandleClient(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGet handles GET requests for a single client by slug
-func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
+func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	// get slug param from request
 	segments := strings.Split(r.URL.Path, "/")
@@ -192,7 +183,7 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	client, err := h.service.GetClient(slug)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to get client: %v", err.Error()))
-		h.HandleServiceError(w, err)
+		h.service.HandleServiceError(w, err)
 		return
 	}
 
@@ -210,7 +201,7 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePost handles POST requests for a single client
-func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
+func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// get slug param from request
 	segments := strings.Split(r.URL.Path, "/")
@@ -284,7 +275,7 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	client, err := h.service.GetClient(slug)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to get client: %v", err.Error()))
-		h.HandleServiceError(w, err)
+		h.service.HandleServiceError(w, err)
 		return
 	}
 
@@ -304,7 +295,7 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	err = h.service.UpdateClient(updated)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to update client: %v", err.Error()))
-		h.HandleServiceError(w, err)
+		h.service.HandleServiceError(w, err)
 		return
 	}
 
@@ -348,41 +339,6 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "failed to encode updated client to json",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-}
-
-// HandleServiceError handles service errors
-func (h *handler) HandleServiceError(w http.ResponseWriter, err error) {
-
-	switch {
-	case strings.Contains(err.Error(), ErrInvalidSlug):
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusBadRequest,
-			Message:    ErrInvalidSlug,
-		}
-		e.SendJsonErr(w)
-		return
-	case strings.Contains(err.Error(), "invalid"):
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusUnprocessableEntity,
-			Message:    err.Error(),
-		}
-		e.SendJsonErr(w)
-		return
-	case strings.Contains(err.Error(), ErrClientNotFound):
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusNotFound,
-			Message:    ErrClientNotFound,
-		}
-		e.SendJsonErr(w)
-		return
-	default:
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusInternalServerError,
-			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return

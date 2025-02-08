@@ -17,6 +17,7 @@ const (
 	ComponentRefresh = "refresh"
 	ComponentScopes  = "scopes"
 	ComponentClients = "s2s servivce clients"
+	ComponentReset   = "reset service password"
 
 	ServiceKey = "service"
 
