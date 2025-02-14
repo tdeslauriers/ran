@@ -2,6 +2,7 @@ package clients
 
 import (
 	"fmt"
+	"ran/pkg/scopes"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
@@ -34,13 +35,15 @@ var userAllowedWrite = []string{"w:ran:clients:*"}
 type Handler interface {
 	ClientHandler
 	ResetHandler
+	ScopesHanlder
 }
 
 // NewHandler creates a new service client Handler interface abstracting a concrete implementations
-func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
+func NewHandler(s Service, scope scopes.Service, s2s, iam jwt.Verifier) Handler {
 	return &handler{
 		ClientHandler: NewClientHandler(s, s2s, iam),
 		ResetHandler:  NewResetHandler(s, s2s, iam),
+		ScopesHanlder: NewScopesHandler(s, scope, s2s, iam),
 	}
 }
 
@@ -50,6 +53,7 @@ var _ Handler = (*handler)(nil)
 type handler struct {
 	ClientHandler
 	ResetHandler
+	ScopesHanlder
 }
 
 type Service interface {
@@ -143,4 +147,28 @@ type ClientScope struct {
 	ScopeCreatedAt string `db:"scope_created_at" json:"created_at"`
 	Active         bool   `db:"active" json:"active"`
 	ScopeSlug      string `db:"scope_slug" json:"slug,omitempty"`
+}
+
+// ClientService is a model for client-scopes cmds received by the client handler
+type ClientScopesCmd struct {
+	ClientSlug string   `json:"slug"`
+	Scopes     []string `json:"scopes"` // uuids of the scope slugs => for lookup
+}
+
+// ValidateCmd performs input validation check on client scopes fields.
+func (c *ClientScopesCmd) ValidateCmd() error {
+
+	if !validate.IsValidUuid(c.ClientSlug) {
+		return fmt.Errorf("invalid client slug")
+	}
+
+	if len(c.Scopes) > 0 {
+		for _, slug := range c.Scopes {
+			if !validate.IsValidUuid(slug) {
+				return fmt.Errorf("invalid scope slug submitted: all slugs must be valid uuids")
+			}
+		}
+	}
+
+	return nil
 }

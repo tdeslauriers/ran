@@ -23,6 +23,8 @@ type ClientService interface {
 
 	// UpdateClient updates a service client record (doesn not include password updates/resets)
 	UpdateClient(client *Client) error
+
+	UpdateScopes(client *profile.Client, updated []types.Scope) error
 }
 
 // NewClientService creates a new clients service interface abstracting a concrete implementation

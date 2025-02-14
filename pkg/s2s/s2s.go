@@ -163,7 +163,7 @@ func (s *s2s) Run() error {
 	s2sScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, nil) // user jwt verifier not needed
 	iamScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, s.iamVerifier)
 
-	clientHanlder := clients.NewHandler(s.clientsService, s.s2sVerifier, s.iamVerifier)
+	clientHanlder := clients.NewHandler(s.clientsService, s.scopesService, s.s2sVerifier, s.iamVerifier)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", diagnostics.HealthCheckHandler)
@@ -185,6 +185,7 @@ func (s *s2s) Run() error {
 	mux.HandleFunc("/clients", clientHanlder.HandleClients)
 	mux.HandleFunc("/clients/reset", clientHanlder.HandleReset)
 	mux.HandleFunc("/clients/", clientHanlder.HandleClient)
+	mux.HandleFunc("/clients/scopes", clientHanlder.HandleScopes)
 
 	s2sServer := &connect.TlsServer{
 		Addr:      s.config.ServicePort,

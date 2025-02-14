@@ -46,7 +46,7 @@ func (s *clientErrService) HandleServiceError(w http.ResponseWriter, err error) 
 	case strings.Contains(err.Error(), ErrClientNotFound):
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusNotFound,
-			Message:    ErrClientNotFound,
+			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return
