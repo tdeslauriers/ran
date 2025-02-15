@@ -288,7 +288,7 @@ func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Sco
 									scope_uuid, 
 									created_at
 								)
-							) VALUES (?, ?, ?)`
+								VALUES (?, ?, ?)`
 						if err := s.sql.InsertRecord(query, xref); err != nil {
 							errChan <- fmt.Errorf("%s for scope %s to client %s: %v", ErrAddXref, scope.Name, client.Name, err)
 						}

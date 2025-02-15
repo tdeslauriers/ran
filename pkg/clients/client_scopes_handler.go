@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"ran/internal/util"
 	"ran/pkg/scopes"
+	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
@@ -131,8 +132,8 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	// scopes slice being empty indicates all scopes were removed, so still needs to be
 	// submitted to the client service to remove them all.
 	var updated []types.Scope
-	if len(cmd.Scopes) > 0 {
-		for _, slug := range cmd.Scopes {
+	if len(cmd.ScopeSlugs) > 0 {
+		for _, slug := range cmd.ScopeSlugs {
 			var exists bool
 			for _, s := range allScopes {
 				if s.Slug == slug {
@@ -166,7 +167,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// log success
 	// unlikely to error because token successfully parsed at token validation above
-	jot, _ := jwt.BuildFromToken(accessToken)
+	jot, _ := jwt.BuildFromToken(strings.TrimPrefix(accessToken, "Bearer "))
 	h.logger.Info(fmt.Sprintf("service client %s's assigned scopes were updated successfully by %s", client.Name, jot.Claims.Subject))
 
 	// respond 204
