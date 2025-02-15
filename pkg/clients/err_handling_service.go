@@ -29,6 +29,8 @@ func (s *clientErrService) HandleServiceError(w http.ResponseWriter, err error) 
 
 	switch {
 	case strings.Contains(err.Error(), ErrInvalidSlug):
+	case strings.Contains(err.Error(), ErrClientMissing):
+	case strings.Contains(err.Error(), "invalid"):
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    ErrInvalidSlug,
@@ -36,7 +38,8 @@ func (s *clientErrService) HandleServiceError(w http.ResponseWriter, err error) 
 		e.SendJsonErr(w)
 		return
 	case strings.Contains(err.Error(), ErrInvalidPwMismatch):
-	case strings.Contains(err.Error(), "invalid"):
+	case strings.Contains(err.Error(), ErrRemoveXref):
+	case strings.Contains(err.Error(), ErrAddXref):
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnprocessableEntity,
 			Message:    err.Error(),

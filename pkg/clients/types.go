@@ -14,10 +14,14 @@ const (
 	ErrInvalidClient  = "invalid service client"
 	ErrClientNotFound = "service client not found"
 
+	ErrClientMissing     = "service client is required to update client scopes: cannot be nil"
 	ErrInvalidResourceId = "invalid resource id"
 	ErrInvalidCurrentPw  = "invalid current password"
 	ErrInvalidNewPw      = "invalid new password"
+
 	ErrInvalidPwMismatch = "new password and confirm password do not match"
+	ErrRemoveXref        = " failed to remove client-scope xref record"
+	ErrAddXref           = " failed to add client-scope xref record"
 
 	ErrIncorrectPassword = "incorrect password"
 )

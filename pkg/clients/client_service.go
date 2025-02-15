@@ -190,13 +190,7 @@ func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Sco
 
 	// validate client is not nil
 	if client == nil {
-		return fmt.Errorf("service client is required to update client scopes: cannot be nil")
-	}
-
-	// if both client and updated scopes are nil, return
-	if client.Scopes == nil && updated == nil {
-		s.logger.Info("both client scopes and updates scopes are nil: no scopes to update")
-		return nil
+		return fmt.Errorf(ErrClientMissing)
 	}
 
 	// if client scopes and updated scopes are both empty, return
@@ -267,7 +261,7 @@ func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Sco
 								FROM client_scope
 								WHERE client_uuid = ? AND scope_uuid = ?`
 						if err := s.sql.DeleteRecord(query, client.Id, scope.Uuid); err != nil {
-							errChan <- fmt.Errorf("failed to remove scope %s from client %s: %v", scope.Name, client.Name, err)
+							errChan <- fmt.Errorf("%s for scope %s from client %s: %v", ErrRemoveXref, scope.Name, client.Name, err)
 						}
 
 						s.logger.Info(fmt.Sprintf("successfully removed xref record for scope %s from client %s", scope.Name, client.Name))
@@ -296,7 +290,7 @@ func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Sco
 								)
 							) VALUES (?, ?, ?)`
 						if err := s.sql.InsertRecord(query, xref); err != nil {
-							errChan <- fmt.Errorf("failed to add xref record for scope %s to client %s: %v", scope.Name, client.Name, err)
+							errChan <- fmt.Errorf("%s for scope %s to client %s: %v", ErrAddXref, scope.Name, client.Name, err)
 						}
 
 						s.logger.Info(fmt.Sprintf("successfully added xref record for scope %s to client %s", scope.Name, client.Name))

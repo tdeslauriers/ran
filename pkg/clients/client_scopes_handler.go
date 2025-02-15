@@ -94,7 +94,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 		errMsg := fmt.Sprintf("invalid /client/scopes request: %v", err)
 		h.logger.Error(errMsg)
 		e := connect.ErrorHttp{
-			StatusCode: http.StatusUnprocessableEntity,
+			StatusCode: http.StatusBadRequest,
 			Message:    errMsg,
 		}
 		e.SendJsonErr(w)
