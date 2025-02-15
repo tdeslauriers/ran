@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"ran/internal/util"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/profile"
@@ -177,6 +180,151 @@ func (s *clientService) UpdateClient(client *Client) error {
 		errMsg := fmt.Sprintf("failed to update service client record for slug %s: %v", client.Slug, err)
 		s.logger.Error(errMsg)
 		return fmt.Errorf(errMsg)
+	}
+
+	return nil
+}
+
+// UpdateScopes is a concrete impl of the Service interface method: updates a service client's assigned scopes
+func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Scope) error {
+
+	// validate client is not nil
+	if client == nil {
+		return fmt.Errorf("service client is required to update client scopes: cannot be nil")
+	}
+
+	// if both client and updated scopes are nil, return
+	if client.Scopes == nil && updated == nil {
+		s.logger.Info("both client scopes and updates scopes are nil: no scopes to update")
+		return nil
+	}
+
+	// if client scopes and updated scopes are both empty, return
+	if len(client.Scopes) < 1 && len(updated) < 1 {
+		s.logger.Info("both client scopes and updated scopes are empty: no scopes to update")
+		return nil
+	}
+
+	// if both client and updated scopes are not empty, reconcile
+	if len(updated) > 0 || len(client.Scopes) > 0 {
+
+		// idendify scopes to remove, if any
+		var (
+			toRemove  = make(map[types.Scope]bool)
+			isRemoved bool
+		)
+
+		for _, scope := range client.Scopes {
+			isRemoved = true
+			// if updated is empty this will remove all scopes
+			for _, u := range updated {
+				if scope.Uuid == u.Uuid {
+					isRemoved = false
+					break
+				}
+			}
+			if isRemoved {
+				toRemove[scope] = true
+			}
+		}
+
+		// identify scopes to add, if any
+		var (
+			toAdd   = make(map[types.Scope]bool)
+			isAdded bool
+		)
+		for _, u := range updated {
+			isAdded = true
+			// if client scopes is empty this will add all scopes in updated
+			for _, scope := range client.Scopes {
+				if u.Uuid == scope.Uuid {
+					isAdded = false
+					break
+				}
+			}
+			if isAdded {
+				toAdd[u] = true
+			}
+		}
+
+		// add-to and remove-from client_scopes xref table
+		if len(toRemove) > 0 || len(toAdd) > 0 {
+
+			var (
+				wg      sync.WaitGroup
+				errChan = make(chan error, len(toRemove)+len(toAdd))
+			)
+
+			// remove scopes
+			if len(toRemove) > 0 {
+				for scope := range toRemove {
+					wg.Add(1)
+					go func(scope types.Scope) {
+						defer wg.Done()
+
+						query := `
+								DELETE 
+								FROM client_scope
+								WHERE client_uuid = ? AND scope_uuid = ?`
+						if err := s.sql.DeleteRecord(query, client.Id, scope.Uuid); err != nil {
+							errChan <- fmt.Errorf("failed to remove scope %s from client %s: %v", scope.Name, client.Name, err)
+						}
+
+						s.logger.Info(fmt.Sprintf("successfully removed xref record for scope %s from client %s", scope.Name, client.Name))
+					}(scope)
+				}
+			}
+
+			// add scopes
+			if len(toAdd) > 0 {
+				for scope := range toAdd {
+					wg.Add(1)
+					go func(scope types.Scope) {
+						defer wg.Done()
+
+						xref := ClientScopeXref{
+							ClientId:  client.Id,
+							ScopeId:   scope.Uuid,
+							CreatedAt: data.CustomTime{Time: time.Now().UTC()},
+						}
+
+						query := `
+								INSERT INTO client_scope (
+									client_uuid, 
+									scope_uuid, 
+									created_at
+								)
+							) VALUES (?, ?, ?)`
+						if err := s.sql.InsertRecord(query, xref); err != nil {
+							errChan <- fmt.Errorf("failed to add xref record for scope %s to client %s: %v", scope.Name, client.Name, err)
+						}
+
+						s.logger.Info(fmt.Sprintf("successfully added xref record for scope %s to client %s", scope.Name, client.Name))
+					}(scope)
+				}
+			}
+
+			// wait for all go routines to finish
+			wg.Wait()
+			close(errChan)
+
+			// check for errors
+			errCount := len(errChan)
+			if errCount > 0 {
+				var sb strings.Builder
+				counter := 0
+				for i := 0; i < errCount; i++ {
+					for err := range errChan {
+						sb.WriteString(err.Error())
+						if counter+1 < errCount {
+							sb.WriteString("; ")
+						}
+						counter++
+					}
+				}
+				return fmt.Errorf(sb.String())
+			}
+		}
 	}
 
 	return nil

@@ -74,7 +74,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 	// parse request body
 	var cmd profile.ResetCmd
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-		errMsg := fmt.Sprintf("failed to decode json reset request body", "err", err.Error())
+		errMsg := fmt.Sprintf("failed to decode json reset request body: %s", err.Error())
 		h.logger.Error(errMsg)
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
@@ -103,7 +103,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jot, _ := jwt.BuildFromToken(accessToken) // ignore error, already validated so parsing should be successful
-		h.logger.Info(fmt.Sprintf("service client %s password was reset successfully by %s", cmd.ResourceId, jot.Claims.Subject))
+	h.logger.Info(fmt.Sprintf("service client %s password was reset successfully by %s", cmd.ResourceId, jot.Claims.Subject))
 
 	// respond with success
 	w.WriteHeader(http.StatusNoContent)

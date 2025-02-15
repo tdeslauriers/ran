@@ -117,6 +117,16 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	// get scopes and lookup each slug
 	// Note: chose to pull back all scopes and loop thru, rather than call the db for each slug
 	allScopes, err := h.scopesSvc.GetScopes()
+	if err != nil {
+		errMsg := fmt.Sprintf("failed to retrieve scopes records: %v", err)
+		h.logger.Error(errMsg)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "interal server error",
+		}
+		e.SendJsonErr(w)
+		return
+	}
 
 	// scopes slice being empty indicates all scopes were removed, so still needs to be
 	// submitted to the client service to remove them all.

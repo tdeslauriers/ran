@@ -172,3 +172,10 @@ func (c *ClientScopesCmd) ValidateCmd() error {
 
 	return nil
 }
+
+// ClientScopeXref is a model for a many-to-many xref table holding clients <--> scopes
+type ClientScopeXref struct {
+	ClientId  string          `db:"client_uuid"`
+	ScopeId   string          `db:"scope_uuid"`
+	CreatedAt data.CustomTime `db:"created_at"`
+}
