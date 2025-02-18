@@ -28,15 +28,20 @@ type clientErrService struct{}
 func (s *clientErrService) HandleServiceError(w http.ResponseWriter, err error) {
 
 	switch {
+	case strings.Contains(err.Error(), ErrInvalidResourceId):
 	case strings.Contains(err.Error(), ErrInvalidSlug):
+	case strings.Contains(err.Error(), ErrInvalidClient):
+	case strings.Contains(err.Error(), ErrInvalidOwnerName):
 	case strings.Contains(err.Error(), ErrClientMissing):
-	case strings.Contains(err.Error(), "invalid"):
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    ErrInvalidSlug,
 		}
 		e.SendJsonErr(w)
 		return
+	case strings.Contains(err.Error(), ErrInvalidRegisterPw):
+	case strings.Contains(err.Error(), ErrInvalidNewPw):
+	case strings.Contains(err.Error(), ErrInvalidCurrentPw):
 	case strings.Contains(err.Error(), ErrInvalidPwMismatch):
 	case strings.Contains(err.Error(), ErrRemoveXref):
 	case strings.Contains(err.Error(), ErrAddXref):

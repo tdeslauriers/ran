@@ -10,14 +10,15 @@ const (
 
 	ComponentKey = "component"
 
-	ComponentMain    = "main"
-	ComponentAuthn   = "authentication"
-	ComponentS2s     = "s2s"
-	ComponentLogin   = "login"
-	ComponentRefresh = "refresh"
-	ComponentScopes  = "scopes"
-	ComponentClients = "s2s servivce clients"
-	ComponentReset   = "reset service password"
+	ComponentMain     = "main"
+	ComponentAuthn    = "authentication"
+	ComponentS2s      = "s2s"
+	ComponentLogin    = "login"
+	ComponentRefresh  = "refresh"
+	ComponentScopes   = "scopes"
+	ComponentClients  = "s2s servivce clients"
+	ComponentReset    = "reset service password"
+	ComponentRegister = "register service client"
 
 	ServiceKey = "service"
 
