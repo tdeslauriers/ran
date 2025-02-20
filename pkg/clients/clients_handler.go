@@ -188,8 +188,7 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(client)
-	if err != nil {
+	if err = json.NewEncoder(w).Encode(client); err != nil {
 		h.logger.Error(fmt.Sprintf("failed to encode service client to json: %v", err.Error()))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,

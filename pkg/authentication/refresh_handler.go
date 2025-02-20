@@ -73,10 +73,11 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	// lookup refresh token
 	refresh, err := h.authService.GetRefreshToken(cmd.RefreshToken)
 	if err != nil {
-		h.logger.Error("failed to get refresh token", "err", err.Error())
+		errMsg := fmt.Sprintf("failed to get refresh token: %v", err)
+		h.logger.Error(errMsg)
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
-			Message:    "invalid refresh token",
+			Message:    errMsg,
 		}
 		e.SendJsonErr(w)
 		return
@@ -179,6 +180,8 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			RefreshToken:   refresh.RefreshToken,
 			RefreshExpires: data.CustomTime{Time: refresh.CreatedAt.Add(RefreshDuration * time.Minute)}, //  same expiry
 		}
+
+		h.logger.Info(fmt.Sprintf("successfully refreshed and minted new s2s token for client id %s", refresh.ClientId))
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(authz); err != nil {
