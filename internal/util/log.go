@@ -3,6 +3,7 @@ package util
 const (
 	PackageKey = "pkg"
 
+	PackageMain           = "main"
 	PackageClients        = "clients"
 	PackageScopes         = "scopes"
 	PackageS2s            = "s2s"

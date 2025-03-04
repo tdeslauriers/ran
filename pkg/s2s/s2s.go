@@ -93,16 +93,11 @@ func New(config config.Config) (S2s, error) {
 
 	s2sSigner := jwt.NewSigner(s2sPrivateKey)
 
-	// jwt s2sVerifier
-	s2sVerifier := jwt.NewVerifier(config.ServiceName, &s2sPrivateKey.PublicKey)
-
 	// jwt iamVerifier
 	iamPublicKey, err := sign.ParsePublicEcdsaCert(config.Jwt.UserVerifyingKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse iam verifying public key: %v", err)
 	}
-
-	iamVerifier := jwt.NewVerifier(config.ServiceName, iamPublicKey)
 
 	// s2s auth service
 	s2sAuthService := authentication.NewS2sAuthService(repository, s2sSigner, indexer, cryptor)
@@ -120,8 +115,8 @@ func New(config config.Config) (S2s, error) {
 		config:         config,
 		serverTls:      serverTlsConfig,
 		repository:     repository,
-		s2sVerifier:    s2sVerifier,
-		iamVerifier:    iamVerifier,
+		s2sVerifier:    jwt.NewVerifier(config.ServiceName, &s2sPrivateKey.PublicKey),
+		iamVerifier:    jwt.NewVerifier(config.ServiceName, iamPublicKey),
 		authService:    s2sAuthService,
 		scopesService:  scopesService,
 		clientsService: clientsService,
@@ -173,8 +168,8 @@ func (s *s2s) Run() error {
 
 	// scopes endpoint for services (not user facing)
 	// requires s2s service-call-specific scopes
-	mux.HandleFunc("/service/scopes", s2sScopesHandler.HandleScopes)
-	mux.HandleFunc("/service/scopes/active", s2sScopesHandler.HandleActiveScopes)
+	mux.HandleFunc("/s2s/scopes", s2sScopesHandler.HandleScopes)
+	mux.HandleFunc("/s2s/scopes/active", s2sScopesHandler.HandleActiveScopes)
 
 	// scopes endpoint for users, ie, admin
 	mux.HandleFunc("/scopes", iamScopesHandler.HandleScopes)
