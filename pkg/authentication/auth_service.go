@@ -209,7 +209,7 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh
 			ch <- fmt.Errorf("failed to decrypt service name %s for refresh token xxxxxx-%s: %v", service, refreshToken[len(refreshToken)-6:], err)
 			return
 		}
-		*decryptedService = decrypted
+		*decryptedService = string(decrypted)
 	}(refresh.ServiceName, &decryptedService, errChan, &wgDecrypt)
 
 	// decrypt refresh token
@@ -222,7 +222,7 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh
 			ch <- fmt.Errorf("failed to decrypt refresh token xxxxxx-%s: %v", refresh[len(refresh)-6:], err)
 			return
 		}
-		*decryptedRefresh = decrypted
+		*decryptedRefresh = string(decrypted)
 	}(refresh.RefreshToken, &decryptedRefresh, errChan, &wgDecrypt)
 
 	// decrypt client id
@@ -235,7 +235,7 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh
 			ch <- fmt.Errorf("failed to decrypt client id %s for refresh token xxxxxx-%s: %v", client, refreshToken[len(refreshToken)-6:], err)
 			return
 		}
-		*decryptedClient = decrypted
+		*decryptedClient = (string(decrypted))
 	}(refresh.ClientId, &decryptedClient, errChan, &wgDecrypt)
 
 	// wait for all decryption go routines to finish
@@ -310,7 +310,7 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 	go func(service string, encryptedService *string, ch chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		encrypted, err := s.cryptor.EncryptServiceData(service)
+		encrypted, err := s.cryptor.EncryptServiceData([]byte(service))
 		if err != nil {
 			ch <- fmt.Errorf("%s %s for db record: %v", ErrEncryptServiceName, service, err)
 			return
@@ -323,7 +323,7 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 	go func(refresh string, encryptedRefresh *string, ch chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		encrypted, err := s.cryptor.EncryptServiceData(refresh)
+		encrypted, err := s.cryptor.EncryptServiceData([]byte(refresh))
 		if err != nil {
 			ch <- fmt.Errorf("%s xxxxxx-%s for db record: %v", ErrEncryptRefresh, refresh[len(refresh)-6:], err)
 			return
@@ -336,7 +336,7 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 	go func(client string, encryptedClient *string, ch chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		encrypted, err := s.cryptor.EncryptServiceData(client)
+		encrypted, err := s.cryptor.EncryptServiceData([]byte(client))
 		if err != nil {
 			ch <- fmt.Errorf("%s %s for db record: %v", ErrEncryptClientId, client, err)
 			return

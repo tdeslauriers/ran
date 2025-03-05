@@ -33,18 +33,18 @@ func (m *mockIndexer) ObtainBlindIndex(data string) (string, error) {
 
 type mockCryptor struct{}
 
-func (m *mockCryptor) EncryptServiceData(data string) (string, error) {
-	if data == "failed encrypt" {
+func (m *mockCryptor) EncryptServiceData(data []byte) (string, error) {
+	if string(data) == "failed encrypt" {
 		return "", errors.New("failed to encrypt")
 	}
-	return "encrypted-" + data, nil
+	return "encrypted-" + string(data), nil
 }
 
-func (m *mockCryptor) DecryptServiceData(data string) (string, error) {
+func (m *mockCryptor) DecryptServiceData(data string) ([]byte, error) {
 	if data == "failed decrypt" {
-		return "", errors.New("failed to decrypt")
+		return nil, errors.New("failed to decrypt")
 	}
-	return strings.TrimPrefix(data, "encrypted-"), nil
+	return []byte(strings.TrimPrefix(data, "encrypted-")), nil
 }
 
 type mockSqlRepository struct {
