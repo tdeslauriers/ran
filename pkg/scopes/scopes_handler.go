@@ -88,7 +88,7 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
-	if authorized, err := h.s2sVerifier.IsAuthorized(allowedRead, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -97,7 +97,7 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	// check if iamVerifier is nil, if not nil, validate user token
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
-		if authorized, err := h.iamVerifier.IsAuthorized(allowedRead, usrToken); !authorized {
+		if _, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken); err != nil {
 			h.logger.Error(fmt.Sprintf("failed to validate user token: %v", err.Error()))
 			connect.RespondAuthFailure(connect.User, err, w)
 			return
@@ -153,7 +153,7 @@ func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
-	if authorized, err := h.s2sVerifier.IsAuthorized(allowedRead, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -162,7 +162,7 @@ func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
 	// check if iamVerifier is nil, if not nil, validate user token
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
-		if authorized, err := h.iamVerifier.IsAuthorized(allowedRead, usrToken); !authorized {
+		if _, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken); err != nil {
 			h.logger.Error(fmt.Sprintf("failed to validate user token: %v", err.Error()))
 			connect.RespondAuthFailure(connect.User, err, w)
 			return
@@ -213,7 +213,7 @@ func (h *handler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
-	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("/scopes/add handler failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -221,7 +221,7 @@ func (h *handler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
-	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, usrToken); !authorized {
+	if _, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, usrToken); err != nil {
 		h.logger.Error(fmt.Sprintf("/scopes/add handler failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
@@ -277,18 +277,13 @@ func (h *handler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 // concrete impl for the HandleScope method
 func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
 
-	switch r.Method {
-	case http.MethodGet:
-		h.handleGet(w, r)
-		return
-	// case "PUT":
-	// 	return
-	case http.MethodPost:
-		h.handlePost(w, r)
-		return
-	// case "DELETE":
-	// 	return
-	default:
+	// select autorization required scopes
+	var required []string
+	if r.Method == http.MethodGet {
+		required = userAllowedRead
+	} else if r.Method == http.MethodPost {
+		required = userAllowedWrite
+	} else {
 		h.logger.Error("only GET, PUT, POST, DELETE http methods allowed")
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
@@ -297,11 +292,24 @@ func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
 		e.SendJsonErr(w)
 		return
 	}
-}
 
-// handleGet handles GET requests for a single scope
-// concrete impl for the GET part of HandleScope method
-func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
+	// validate s2s token
+	svcToken := r.Header.Get("Service-Authorization")
+	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
+	if _, err := h.s2sVerifier.BuildAuthorized(required, svcToken); err != nil {
+		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate s2s token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.S2s, err, w)
+		return
+	}
+
+	// validate user access token
+	usrToken := r.Header.Get("Authorization")
+	authorized, err := h.iamVerifier.BuildAuthorized(required, usrToken)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate user token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.User, err, w)
+		return
+	}
 
 	// get slug param from request
 	segments := strings.Split(r.URL.Path, "/")
@@ -330,22 +338,31 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// validate s2s token
-	svcToken := r.Header.Get("Service-Authorization")
-	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
-	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedRead, svcToken); !authorized {
-		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate s2s token: %v", err.Error()))
-		connect.RespondAuthFailure(connect.S2s, err, w)
+	switch r.Method {
+	case http.MethodGet:
+		h.handleGet(w, slug)
+		return
+	// case "PUT":
+	// 	return
+	case http.MethodPost:
+		h.handlePost(w, r, slug, authorized.Claims.Subject)
+		return
+	// case "DELETE":
+	// 	return
+	default:
+		h.logger.Error("only GET, PUT, POST, DELETE http methods allowed")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "only GET, PUT, POST, DELETE http methods allowed",
+		}
+		e.SendJsonErr(w)
 		return
 	}
+}
 
-	// validate user access token
-	usrToken := r.Header.Get("Authorization")
-	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedRead, usrToken); !authorized {
-		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate user token: %v", err.Error()))
-		connect.RespondAuthFailure(connect.User, err, w)
-		return
-	}
+// handleGet handles GET requests for a single scope
+// concrete impl for the GET part of HandleScope method
+func (h *handler) handleGet(w http.ResponseWriter, slug string) {
 
 	scope, err := h.svc.GetScope(slug)
 	if err != nil {
@@ -369,51 +386,7 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 
 // handlePost handles PUT requests for a single scope
 // concrete impl for the PUT part of HandleScope method
-func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
-
-	// get slug param from request
-	segments := strings.Split(r.URL.Path, "/")
-
-	var slug string
-	if len(segments) > 1 {
-		slug = segments[len(segments)-1]
-	} else {
-		h.logger.Error("missing slug param in request")
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusBadRequest,
-			Message:    "missing slug param in request",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-
-	// light weight input validation (not checking if slug is valid or well-formed)
-	if len(slug) < 16 || len(slug) > 64 {
-		h.logger.Error("invalid scope slug")
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusBadRequest,
-			Message:    "invalid scope slug",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-
-	// validate s2s token
-	svcToken := r.Header.Get("Service-Authorization")
-	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
-	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
-		h.logger.Error(fmt.Sprintf("post /scope/{slug} handler failed to validate s2s token: %v", err.Error()))
-		connect.RespondAuthFailure(connect.S2s, err, w)
-		return
-	}
-
-	// validate user access token
-	userToken := r.Header.Get("Authorization")
-	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, userToken); !authorized {
-		h.logger.Error(fmt.Sprintf("post /scope/{slug} handler failed to validate user token: %v", err.Error()))
-		connect.RespondAuthFailure(connect.User, err, w)
-		return
-	}
+func (h *handler) handlePost(w http.ResponseWriter, r *http.Request, slug, subject string) {
 
 	// get cmd from request body
 	var cmd types.Scope
@@ -467,36 +440,25 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jot, err := jwt.BuildFromToken(strings.TrimPrefix(userToken, "Bearer "))
-	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to parse jwt token: %s", err.Error()))
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusInternalServerError,
-			Message:    "failed to parse jwt token",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-
 	// log updates
 	if cmd.ServiceName != scope.ServiceName {
-		h.logger.Info(fmt.Sprintf("service name updated from '%s' to '%s' by %s", scope.ServiceName, cmd.ServiceName, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("service name updated from '%s' to '%s' by %s", scope.ServiceName, cmd.ServiceName, subject))
 	}
 
 	if cmd.Scope != scope.Scope {
-		h.logger.Info(fmt.Sprintf("scope updated from '%s' to '%s' by %s", scope.Scope, cmd.Scope, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("scope updated from '%s' to '%s' by %s", scope.Scope, cmd.Scope, subject))
 	}
 
 	if cmd.Name != scope.Name {
-		h.logger.Info(fmt.Sprintf("name updated from '%s' to '%s' by %s", scope.Name, cmd.Name, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("name updated from '%s' to '%s' by %s", scope.Name, cmd.Name, subject))
 	}
 
 	if cmd.Description != scope.Description {
-		h.logger.Info(fmt.Sprintf("description updated from '%s' to '%s' by %s", scope.Description, cmd.Description, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("description updated from '%s' to '%s' by %s", scope.Description, cmd.Description, subject))
 	}
 
 	if cmd.Active != scope.Active {
-		h.logger.Info(fmt.Sprintf("active updated from %t to %t by %s", scope.Active, cmd.Active, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("active updated from %t to %t by %s", scope.Active, cmd.Active, subject))
 	}
 
 	// respond with updated scope

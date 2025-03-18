@@ -57,7 +57,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// validate s2stoken
 	svcToken := r.Header.Get("Service-Authorization")
-	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("password reset handler failed to authorize service token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -65,7 +65,8 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// validate iam access token
 	accessToken := r.Header.Get("Authorization")
-	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, accessToken); !authorized {
+	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, accessToken)
+	if err != nil {
 		h.logger.Error(fmt.Sprintf("password reset handler failed to authorize iam token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
@@ -102,8 +103,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jot, _ := jwt.BuildFromToken(accessToken) // ignore error, already validated so parsing should be successful
-	h.logger.Info(fmt.Sprintf("service client %s password was reset successfully by %s", cmd.ResourceId, jot.Claims.Subject))
+	h.logger.Info(fmt.Sprintf("service client %s password was reset successfully by %s", cmd.ResourceId, authorized.Claims.Subject))
 
 	// respond with success
 	w.WriteHeader(http.StatusNoContent)

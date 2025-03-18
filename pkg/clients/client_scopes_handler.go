@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"ran/internal/util"
 	"ran/pkg/scopes"
-	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
@@ -63,7 +62,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// validate s2stoken
 	svcToken := r.Header.Get("Service-Authorization")
-	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
 		h.logger.Error("password reset handler failed to authorize service token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -71,7 +70,8 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// validate iam access token
 	accessToken := r.Header.Get("Authorization")
-	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, accessToken); !authorized {
+	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, accessToken)
+	if err != nil {
 		h.logger.Error("password reset handler failed to authorize iam token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
@@ -166,9 +166,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// log success
-	// unlikely to error because token successfully parsed at token validation above
-	jot, _ := jwt.BuildFromToken(strings.TrimPrefix(accessToken, "Bearer "))
-	h.logger.Info(fmt.Sprintf("service client %s's assigned scopes were updated successfully by %s", client.Name, jot.Claims.Subject))
+	h.logger.Info(fmt.Sprintf("service client %s's assigned scopes were updated successfully by %s", client.Name, authorized.Claims.Subject))
 
 	// respond 204
 	w.WriteHeader(http.StatusNoContent)

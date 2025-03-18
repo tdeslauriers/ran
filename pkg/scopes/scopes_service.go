@@ -68,7 +68,8 @@ func (s *service) GetScopes() ([]types.Scope, error) {
 				created_at, 
 				active,
 				slug
-			FROM scope`
+			FROM scope
+			ORDER BY service_name, name ASC`
 	err := s.sql.SelectRecords(query, &scopes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get scopes records from db: %v", err)

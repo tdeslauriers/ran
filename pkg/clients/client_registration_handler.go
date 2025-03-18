@@ -59,7 +59,7 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
-	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("/clients/{slug} handler failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -67,7 +67,7 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
-	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, usrToken); !authorized {
+	if _, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, usrToken); err != nil {
 		h.logger.Error(fmt.Sprintf("/clients/{slug} handler failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
 		return

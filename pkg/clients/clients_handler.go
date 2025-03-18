@@ -66,7 +66,7 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
-	if authorized, err := h.s2sVerifier.IsAuthorized(allowedRead, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -75,7 +75,7 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 	// check if iamVerifier is nil, if not nil, validate user token
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
-		if authorized, err := h.iamVerifier.IsAuthorized(allowedRead, usrToken); !authorized {
+		if _, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken); err != nil {
 			h.logger.Error(fmt.Sprintf("failed to validate user token: %v", err.Error()))
 			connect.RespondAuthFailure(connect.User, err, w)
 			return
@@ -166,7 +166,7 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
-	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedRead, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedRead, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("/clients/{slug} handler failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -174,7 +174,7 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
-	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedRead, usrToken); !authorized {
+	if _, err := h.iamVerifier.BuildAuthorized(userAllowedRead, usrToken); err != nil {
 		h.logger.Error(fmt.Sprintf("/clients/{slug} handler failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
@@ -232,7 +232,7 @@ func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
-	if authorized, err := h.s2sVerifier.IsAuthorized(userAllowedWrite, svcToken); !authorized {
+	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("post /client/{slug} handler failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -240,7 +240,8 @@ func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// validate user access token
 	userToken := r.Header.Get("Authorization")
-	if authorized, err := h.iamVerifier.IsAuthorized(userAllowedWrite, userToken); !authorized {
+	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, userToken)
+	if err != nil {
 		h.logger.Error(fmt.Sprintf("post /client/{slug} handler failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
@@ -248,8 +249,7 @@ func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// get cmd from request body
 	var cmd profile.Client
-	err := json.NewDecoder(r.Body).Decode(&cmd)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		h.logger.Error(fmt.Sprintf("failed to decode request body: %v", err.Error()))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
@@ -298,36 +298,25 @@ func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jot, err := jwt.BuildFromToken(strings.TrimPrefix(userToken, "Bearer "))
-	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to parse jwt token: %s", err.Error()))
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusInternalServerError,
-			Message:    "failed to parse jwt token",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-
 	// log updates
 	if cmd.Name != client.Name {
-		h.logger.Info(fmt.Sprintf("sesrvice client name updated from %s to %s by %s", client.Name, cmd.Name, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("sesrvice client name updated from %s to %s by %s", client.Name, cmd.Name, authorized.Claims.Subject))
 	}
 
 	if cmd.Owner != client.Owner {
-		h.logger.Info(fmt.Sprintf("sesrvice client owner updated from %s to %s by %s", client.Owner, cmd.Owner, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("sesrvice client owner updated from %s to %s by %s", client.Owner, cmd.Owner, authorized.Claims.Subject))
 	}
 
 	if cmd.Enabled != client.Enabled {
-		h.logger.Info(fmt.Sprintf("sesrvice client enabled updated from %t to %t by %s", client.Enabled, cmd.Enabled, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("sesrvice client enabled updated from %t to %t by %s", client.Enabled, cmd.Enabled, authorized.Claims.Subject))
 	}
 
 	if cmd.AccountExpired != client.AccountExpired {
-		h.logger.Info(fmt.Sprintf("sesrvice client account_expired updated from %t to %t by %s", client.AccountExpired, cmd.AccountExpired, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("sesrvice client account_expired updated from %t to %t by %s", client.AccountExpired, cmd.AccountExpired, authorized.Claims.Subject))
 	}
 
 	if cmd.AccountLocked != client.AccountLocked {
-		h.logger.Info(fmt.Sprintf("sesrvice client account_locked updated from %t to %t by %s", client.AccountLocked, cmd.AccountLocked, jot.Claims.Subject))
+		h.logger.Info(fmt.Sprintf("sesrvice client account_locked updated from %t to %t by %s", client.AccountLocked, cmd.AccountLocked, authorized.Claims.Subject))
 	}
 
 	// respond with updated client
