@@ -113,29 +113,6 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 // concrete impl of the Handler interface method
 func (h *clientHandler) HandleClient(w http.ResponseWriter, r *http.Request) {
 
-	switch r.Method {
-	case http.MethodGet:
-		h.handleGet(w, r)
-		return
-	case http.MethodPost:
-		h.handlePost(w, r)
-		return
-	// case http.MethodPut:
-	// case http.MethodDelete:
-	default:
-		h.logger.Error(fmt.Sprintf("method not allowed on /clients/slug endpoint: %s", r.Method))
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "method not allowed",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-}
-
-// handleGet handles GET requests for a single client by slug
-func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
-
 	// get slug param from request
 	segments := strings.Split(r.URL.Path, "/")
 
@@ -162,6 +139,29 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		e.SendJsonErr(w)
 		return
 	}
+
+	switch r.Method {
+	case http.MethodGet:
+		h.handleGet(w, r, slug)
+		return
+	case http.MethodPost:
+		h.handlePost(w, r, slug)
+		return
+	// case http.MethodPut:
+	// case http.MethodDelete:
+	default:
+		h.logger.Error(fmt.Sprintf("method not allowed on /clients/slug endpoint: %s", r.Method))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "method not allowed",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+}
+
+// handleGet handles GET requests for a single client by slug
+func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request, slug string) {
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
@@ -200,34 +200,7 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePost handles POST requests for a single client
-func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
-
-	// get slug param from request
-	segments := strings.Split(r.URL.Path, "/")
-
-	var slug string
-	if len(segments) > 1 {
-		slug = segments[len(segments)-1]
-	} else {
-		h.logger.Error("missing service client slug param in request")
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusBadRequest,
-			Message:    "missing service slug param in request",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-
-	// light weight input validation (not checking if slug is valid or well-formed)
-	if len(slug) < 16 || len(slug) > 64 {
-		h.logger.Error("invalid service client slug")
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusBadRequest,
-			Message:    "invalid service client slug",
-		}
-		e.SendJsonErr(w)
-		return
-	}
+func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request, slug string) {
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
