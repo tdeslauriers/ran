@@ -197,7 +197,7 @@ func (s *s2s) Run() error {
 		}
 	}()
 
-	go s.cleanup.ExpiredRefresh(3) // 2am +- 30; refresh tokens live 3 hours
+	s.cleanup.ExpiredRefresh(3) // 2am +- 30; refresh tokens live 3 hours
 
 	return nil
 }

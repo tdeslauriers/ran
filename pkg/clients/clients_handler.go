@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"ran/internal/util"
-	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
@@ -113,39 +112,12 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 // concrete impl of the Handler interface method
 func (h *clientHandler) HandleClient(w http.ResponseWriter, r *http.Request) {
 
-	// get slug param from request
-	segments := strings.Split(r.URL.Path, "/")
-
-	var slug string
-	if len(segments) > 1 {
-		slug = segments[len(segments)-1]
-	} else {
-		h.logger.Error("missing slug param in request")
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusBadRequest,
-			Message:    "missing slug param in request",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-
-	// light weight input validation (not checking if slug is valid or well-formed)
-	if len(slug) < 16 || len(slug) > 64 {
-		h.logger.Error("invalid scope slug")
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusBadRequest,
-			Message:    "invalid scope slug",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-
 	switch r.Method {
 	case http.MethodGet:
-		h.handleGet(w, r, slug)
+		h.handleGet(w, r)
 		return
 	case http.MethodPost:
-		h.handlePost(w, r, slug)
+		h.handlePost(w, r)
 		return
 	// case http.MethodPut:
 	// case http.MethodDelete:
@@ -161,7 +133,7 @@ func (h *clientHandler) HandleClient(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGet handles GET requests for a single client by slug
-func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request, slug string) {
+func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
@@ -177,6 +149,18 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request, slug s
 	if _, err := h.iamVerifier.BuildAuthorized(userAllowedRead, usrToken); err != nil {
 		h.logger.Error(fmt.Sprintf("/clients/{slug} handler failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
+		return
+	}
+
+	// get the url slug from the request
+	slug, err := connect.GetValidSlug(r)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to get valid slug from request: %s", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "invalid service client slug",
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
@@ -200,7 +184,7 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request, slug s
 }
 
 // handlePost handles POST requests for a single client
-func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request, slug string) {
+func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
@@ -217,6 +201,18 @@ func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request, slug 
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("post /client/{slug} handler failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
+		return
+	}
+
+	// get the url slug from the request
+	slug, err := connect.GetValidSlug(r)
+	if err != nil {
+		h.logger.Error(fmt.Sprintf("failed to get valid slug from request: %s", err.Error()))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "invalid service client slug",
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
