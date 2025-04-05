@@ -39,12 +39,12 @@ spec:
             - name: RAN_SERVER_CERT
               valueFrom:
                 secretKeyRef:
-                  name: secret-s2s-server-cert
+                  name: secret-ran-server-cert
                   key: server-cert
             - name: RAN_SERVER_KEY
               valueFrom:
                 secretKeyRef:
-                  name: secret-s2s-server-cert
+                  name: secret-ran-server-cert
                   key: server-key
             - name: RAN_DB_CA_CERT
               valueFrom:
@@ -54,12 +54,12 @@ spec:
             - name: RAN_DB_CLIENT_CERT
               valueFrom:
                 secretKeyRef:
-                  name: secret-s2s-db-client-cert
+                  name: secret-ran-db-client-cert
                   key: client-cert
             - name: RAN_DB_CLIENT_KEY
               valueFrom:
                 secretKeyRef:
-                  name: secret-s2s-db-client-cert
+                  name: secret-ran-db-client-cert
                   key: client-key
             - name: RAN_DATABASE_URL
               valueFrom:

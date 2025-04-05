@@ -2,7 +2,7 @@
 
 # variables
 NAMESPACE="world"
-SECRET_NAME="secret-s2s-db-client-cert"
+SECRET_NAME="secret-ran-db-client-cert"
 
 # get certificate and key from 1Password
 CLIENT_CERT=$(op document get "ran_db_client_prod_cert" --vault world_site | base64 -w 0)
