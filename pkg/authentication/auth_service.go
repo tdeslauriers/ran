@@ -14,8 +14,6 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -23,12 +21,13 @@ const (
 	RefreshDuration time.Duration = time.Duration(180) // minutes
 )
 
-func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, indexer data.Indexer, ciph data.Cryptor) types.S2sAuthService {
+func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, i data.Indexer, ciph data.Cryptor, creds CredService) types.S2sAuthService {
 	return &s2sAuthService{
-		sql:     sql,
-		mint:    mint,
-		indexer: indexer,
-		cryptor: ciph,
+		sql:         sql,
+		mint:        mint,
+		indexer:     i,
+		cryptor:     ciph,
+		credService: creds,
 
 		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentAuthn)),
 	}
@@ -37,10 +36,11 @@ func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, indexer data.Ind
 var _ types.S2sAuthService = (*s2sAuthService)(nil)
 
 type s2sAuthService struct {
-	sql     data.SqlRepository
-	mint    jwt.Signer
-	indexer data.Indexer
-	cryptor data.Cryptor
+	sql         data.SqlRepository
+	mint        jwt.Signer
+	indexer     data.Indexer
+	cryptor     data.Cryptor
+	credService CredService
 
 	logger *slog.Logger
 }
@@ -67,9 +67,7 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 	}
 
 	// validate password
-	secret := []byte(clientSecret)
-	hash := []byte(s2sClient.Password)
-	if err := bcrypt.CompareHashAndPassword(hash, secret); err != nil {
+	if err := s.credService.CompareHashAndPassword(s2sClient.Password, clientSecret); err != nil {
 		s.logger.Error("failed to validate password", "err", err.Error())
 		return errors.New("failed to validate password")
 	}

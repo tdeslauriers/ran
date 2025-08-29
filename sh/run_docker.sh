@@ -2,7 +2,7 @@
 
 docker build -t ran .
 
-docker run --rm -p $(op read "op://world_site/ran_service_container_dev/port"):$(op read "op://world_site/ran_service_container_dev/port") \
+docker run -d --rm -p $(op read "op://world_site/ran_service_container_dev/port"):$(op read "op://world_site/ran_service_container_dev/port") \
     -e RAN_SERVICE_CLIENT_ID=$(op read "op://world_site/ran_service_container_dev/client_id") \
     -e RAN_SERVICE_PORT=":$(op read "op://world_site/ran_service_container_dev/port")" \
     -e RAN_CA_CERT="$(op document get "service_ca_dev_cert" --vault world_site | base64 -w 0)" \
@@ -20,5 +20,6 @@ docker run --rm -p $(op read "op://world_site/ran_service_container_dev/port"):$
     -e RAN_S2S_JWT_SIGNING_KEY="$(op read "op://world_site/ran_jwt_key_pair_dev/signing_key")" \
     -e RAN_S2S_JWT_VERIFYING_KEY="$(op read "op://world_site/ran_jwt_key_pair_dev/verifying_key")" \
     -e RAN_USER_JWT_VERIFYING_KEY="$(op read "op://world_site/shaw_jwt_key_pair_dev/verifying_key")" \
+    -e RAN_HMAC_S2S_AUTH_SECRET="$(op read "op://world_site/ran_hmac_auth_secret_dev/secret")" \
     ran:latest
 

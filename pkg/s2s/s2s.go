@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"ran/internal/util"
 	"ran/pkg/authentication"
 	"ran/pkg/clients"
@@ -70,12 +71,23 @@ func New(config config.Config) (S2s, error) {
 	repository := data.NewSqlRepository(db)
 
 	// indexer
-	hmacSecret, err := base64.StdEncoding.DecodeString(config.Database.IndexSecret)
+	dbHmacSecret, err := base64.StdEncoding.DecodeString(config.Database.IndexSecret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode hmac key: %v", err)
 	}
 
-	indexer := data.NewIndexer(hmacSecret)
+	// for blind index generation and lookups
+	dbIndexer := data.NewIndexer(dbHmacSecret)
+
+	// service specific env variable
+	envCredSecret, ok := os.LookupEnv("RAN_HMAC_S2S_AUTH_SECRET")
+	if !ok {
+		return nil, fmt.Errorf("RAN_HMAC_S2S_AUTH_SECRET environment variable is not set")
+	}
+	credHmacSecret, err := base64.StdEncoding.DecodeString(envCredSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode service credentials secret: %v", err)
+	}
 
 	// field level encryption
 	aes, err := base64.StdEncoding.DecodeString(config.Database.FieldSecret)
@@ -99,17 +111,8 @@ func New(config config.Config) (S2s, error) {
 		return nil, fmt.Errorf("failed to parse iam verifying public key: %v", err)
 	}
 
-	// s2s auth service
-	s2sAuthService := authentication.NewS2sAuthService(repository, s2sSigner, indexer, cryptor)
-
-	// scopes service
-	scopesService := scopes.NewSerivce(repository)
-
-	// clients service
-	clientsService := clients.NewService(repository)
-
-	// clean up: database
-	cleanup := schedule.NewCleanup(repository)
+	// cred service
+	credSvc := authentication.NewCredService(credHmacSecret)
 
 	return &s2s{
 		config:         config,
@@ -117,10 +120,11 @@ func New(config config.Config) (S2s, error) {
 		repository:     repository,
 		s2sVerifier:    jwt.NewVerifier(config.ServiceName, &s2sPrivateKey.PublicKey),
 		iamVerifier:    jwt.NewVerifier(config.ServiceName, iamPublicKey),
-		authService:    s2sAuthService,
-		scopesService:  scopesService,
-		clientsService: clientsService,
-		cleanup:        cleanup,
+		authService:    authentication.NewS2sAuthService(repository, s2sSigner, dbIndexer, cryptor, credSvc),
+		credService:    credSvc,
+		scopesService:  scopes.NewSerivce(repository),
+		clientsService: clients.NewService(repository, credSvc),
+		cleanup:        schedule.NewCleanup(repository),
 
 		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentS2s)),
 	}, nil
@@ -136,6 +140,7 @@ type s2s struct {
 	s2sVerifier    jwt.Verifier
 	iamVerifier    jwt.Verifier
 	authService    types.S2sAuthService
+	credService    authentication.CredService
 	scopesService  scopes.Service
 	clientsService clients.Service
 	cleanup        schedule.Cleanup

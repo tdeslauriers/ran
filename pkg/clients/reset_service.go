@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"ran/internal/util"
+	"ran/pkg/authentication"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/profile"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // ResetService provides service client password reset operations
@@ -19,9 +19,10 @@ type ResetService interface {
 }
 
 // NewResetService creates a new service client ResetService interface abstracting a concrete implementation
-func NewResetService(sql data.SqlRepository) ResetService {
+func NewResetService(sql data.SqlRepository, creds authentication.CredService) ResetService {
 	return &resetService{
-		sql: sql,
+		sql:   sql,
+		creds: creds,
 
 		logger: slog.Default().
 			With(slog.String(util.ServiceKey, util.ServiceS2s)).
@@ -34,7 +35,8 @@ var _ ResetService = (*resetService)(nil)
 
 // resetService is a concrete implementation of the ResetService interface
 type resetService struct {
-	sql data.SqlRepository
+	sql   data.SqlRepository
+	creds authentication.CredService // used to hash passwords for storage
 
 	logger *slog.Logger
 }
@@ -56,9 +58,9 @@ func (s *resetService) ResetPassword(cmd profile.ResetCmd) error {
 	}
 
 	// validate client exists
-	var reset Reset
+	var record Reset
 	qry := "SELECT uuid, password FROM client WHERE uuid = ?"
-	if err := s.sql.SelectRecord(qry, &reset, cmd.ResourceId); err != nil {
+	if err := s.sql.SelectRecord(qry, &record, cmd.ResourceId); err != nil {
 		if err == sql.ErrNoRows {
 			return fmt.Errorf("%s: %s", ErrClientNotFound, cmd.ResourceId)
 		} else {
@@ -67,14 +69,12 @@ func (s *resetService) ResetPassword(cmd profile.ResetCmd) error {
 	}
 
 	// validate current password
-	current := []byte(cmd.CurrentPassword)
-	currentHash := []byte(reset.Password)
-	if err := bcrypt.CompareHashAndPassword(currentHash, current); err != nil {
+	if err := s.creds.CompareHashAndPassword(record.Password, cmd.CurrentPassword); err != nil {
 		return fmt.Errorf("%s for service client: %s", ErrIncorrectPassword, cmd.ResourceId)
 	}
 
 	// hash new password
-	newHash, err := bcrypt.GenerateFromPassword([]byte(cmd.NewPassword), 13)
+	newHash, err := s.creds.GenerateHashFromPassword(cmd.NewPassword)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("failed to hash new password for service client %s: %v", cmd.ResourceId, err))
 		return fmt.Errorf("failed to hash new password")

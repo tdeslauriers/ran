@@ -47,6 +47,20 @@ func (m *mockCryptor) DecryptServiceData(data string) ([]byte, error) {
 	return []byte(strings.TrimPrefix(data, "encrypted-")), nil
 }
 
+type mockCredService struct{}
+
+func (m *mockCredService) GenerateAccessToken() (string, error) {
+	return "", nil
+}
+
+func (m *mockCredService) GenerateHashFromPassword(password string) (string, error) {
+	return "", nil
+}
+
+func (m *mockCredService) CompareHashAndPassword(hash, password string) error {
+	return nil
+}
+
 type mockSqlRepository struct {
 }
 
@@ -141,7 +155,7 @@ func TestPersistToken(t *testing.T) {
 		},
 	}
 
-	mockS2sAuthService := NewS2sAuthService(&mockSqlRepository{}, nil, &mockIndexer{}, &mockCryptor{})
+	mockS2sAuthService := NewS2sAuthService(&mockSqlRepository{}, nil, &mockIndexer{}, &mockCryptor{}, nil)
 
 	// run tests
 	for _, tt := range tests {
@@ -210,7 +224,7 @@ func TestMintToken(t *testing.T) {
 		},
 	}
 
-	mockS2sAuthService := NewS2sAuthService(&mockSqlRepository{}, &mockSigner{}, &mockIndexer{}, &mockCryptor{})
+	mockS2sAuthService := NewS2sAuthService(&mockSqlRepository{}, &mockSigner{}, &mockIndexer{}, &mockCryptor{}, &mockCredService{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

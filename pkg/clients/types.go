@@ -2,6 +2,7 @@ package clients
 
 import (
 	"fmt"
+	"ran/pkg/authentication"
 	"ran/pkg/scopes"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
@@ -76,11 +77,11 @@ type Service interface {
 
 // NewService creates a new service interface abstracting a concrete implementations of
 // the ClientService and ClientErrService interfaces
-func NewService(sql data.SqlRepository) Service {
+func NewService(sql data.SqlRepository, creds authentication.CredService) Service {
 	return &service{
 		ClientService:       NewClientService(sql),
-		RegistrationService: NewRegistrationService(sql),
-		ResetService:        NewResetService(sql),
+		RegistrationService: NewRegistrationService(sql, creds),
+		ResetService:        NewResetService(sql, creds),
 		ClientErrService:    NewErrHandlingService(),
 	}
 }

@@ -1,4 +1,4 @@
-CREATE TABLE client (
+CREATE TABLE IF NOT EXISTS client (
     uuid CHAR(36) PRIMARY KEY,
     password VARCHAR(255) NOT NULL,
     name VARCHAR(64) NOT NULL,
@@ -9,7 +9,8 @@ CREATE TABLE client (
     account_locked BOOLEAN NOT NULL,
     slug CHAR(36) NOT NULL
 );
-CREATE TABLE scope (
+
+CREATE TABLE IF NOT EXISTS scope (
     uuid CHAR(36) PRIMARY KEY,
     service_name VARCHAR(32) NOT NULL,
     scope VARCHAR(64) NOT NULL,
@@ -19,9 +20,10 @@ CREATE TABLE scope (
     active BOOLEAN NOT NULL,
     slug CHAR(36) NOT NULL
 );
-CREATE INDEX idx_sevice_name ON scope(service_name);
-CREATE UNIQUE INDEX idx_scope ON scope(scope);
-CREATE TABLE client_scope (
+CREATE INDEX IF NOT EXISTS idx_sevice_name ON scope(service_name);
+CREATE UNIQUE IF NOT EXISTS INDEX idx_scope ON scope(scope);
+
+CREATE TABLE IF NOT EXISTS client_scope (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     client_uuid CHAR(36) NOT NULL,
     scope_uuid CHAR(36) NOT NULL,
@@ -29,9 +31,10 @@ CREATE TABLE client_scope (
     CONSTRAINT fk_client_scope_xref_id FOREIGN KEY (client_uuid) REFERENCES client (uuid),
     CONSTRAINT fk_scope_client_xref_id FOREIGN KEY (scope_uuid) REFERENCES scope (uuid)
 );
-CREATE INDEX idx_client_scope_xref ON client_scope(client_uuid);
-CREATE INDEX idx_scope_client_xref ON client_scope(scope_uuid);
-CREATE TABLE refresh (
+CREATE INDEX IF NOT EXISTS idx_client_scope_xref ON client_scope(client_uuid);
+CREATE INDEX IF NOT EXISTS idx_scope_client_xref ON client_scope(scope_uuid);
+
+CREATE TABLE IF NOT EXISTS refresh (
     uuid CHAR(36) PRIMARY KEY,
     refresh_index VARCHAR(128) NOT NULL,
     service_name VARCHAR(128),
@@ -41,5 +44,5 @@ CREATE TABLE refresh (
     created_at TIMESTAMP NOT NULL DEFAULT UTC_TIMESTAMP,
     revoked BOOLEAN NOT NULL
 );
-CREATE UNIQUE INDEX idx_refreshindex ON refresh(refresh_index);
-CREATE INDEX idx_client_index ON refresh(client_index);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_refreshindex ON refresh(refresh_index);
+CREATE INDEX IF NOT EXISTS idx_client_index ON refresh(client_index);

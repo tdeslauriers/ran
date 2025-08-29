@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 	"ran/internal/util"
+	"ran/pkg/authentication"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // RegistrationService provides client registration service operations
@@ -19,9 +19,10 @@ type RegistrationService interface {
 }
 
 // NewRegistrationService creates a new client registration service interface abstracting a concrete implementation
-func NewRegistrationService(sql data.SqlRepository) RegistrationService {
+func NewRegistrationService(sql data.SqlRepository, creds authentication.CredService) RegistrationService {
 	return &registrationService{
-		sql: sql,
+		sql:   sql,
+		creds: creds,
 
 		logger: slog.Default().
 			With(slog.String(util.ServiceKey, util.ServiceKey)).
@@ -34,7 +35,8 @@ var _ RegistrationService = (*registrationService)(nil)
 
 // registrationService is a concrete implementation of the RegistrationService interface
 type registrationService struct {
-	sql data.SqlRepository
+	sql   data.SqlRepository
+	creds authentication.CredService // used to hash passwords for storage
 
 	logger *slog.Logger
 }
@@ -61,7 +63,7 @@ func (s *registrationService) Register(cmd *RegisterCmd) (*Client, error) {
 	}
 
 	// hash password for storage
-	hashed, err := bcrypt.GenerateFromPassword([]byte(cmd.Password), 13)
+	hashed, err := s.creds.GenerateHashFromPassword(cmd.Password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash service client password: %v", err)
 	}

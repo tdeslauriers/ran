@@ -13,6 +13,7 @@ const (
 
 	ComponentMain     = "main"
 	ComponentAuthn    = "authentication"
+	ComponentCreds    = "cred service"
 	ComponentS2s      = "s2s"
 	ComponentLogin    = "login"
 	ComponentRefresh  = "refresh"
