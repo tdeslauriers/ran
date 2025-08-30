@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"ran/internal/util"
+
+	"github.com/tdeslauriers/ran/internal/util"
 )
 
 const (

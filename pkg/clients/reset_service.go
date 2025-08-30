@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"ran/internal/util"
-	"ran/pkg/authentication"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/profile"
+	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/pkg/authentication"
 )
 
 // ResetService provides service client password reset operations

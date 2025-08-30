@@ -7,10 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"ran/internal/util"
-	"ran/pkg/authentication"
-	"ran/pkg/clients"
-	"ran/pkg/scopes"
 
 	"github.com/tdeslauriers/carapace/pkg/config"
 	"github.com/tdeslauriers/carapace/pkg/connect"
@@ -20,6 +16,10 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/schedule"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/carapace/pkg/sign"
+	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/pkg/authentication"
+	"github.com/tdeslauriers/ran/pkg/clients"
+	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
 type S2s interface {

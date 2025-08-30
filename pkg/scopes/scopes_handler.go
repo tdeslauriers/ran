@@ -6,12 +6,12 @@ import (
 
 	"log/slog"
 	"net/http"
-	"ran/internal/util"
 	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
+	"github.com/tdeslauriers/ran/internal/util"
 )
 
 // service endpoints require s2s-only endpoint scopes

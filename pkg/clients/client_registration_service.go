@@ -3,12 +3,12 @@ package clients
 import (
 	"fmt"
 	"log/slog"
-	"ran/internal/util"
-	"ran/pkg/authentication"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/pkg/authentication"
 )
 
 // RegistrationService provides client registration service operations

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"ran/internal/util"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/provider"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
+	"github.com/tdeslauriers/ran/internal/util"
 )
 
 const loginFailedMsg string = "login failed due to server error."

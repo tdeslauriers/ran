@@ -2,12 +2,12 @@ package clients
 
 import (
 	"fmt"
-	"ran/pkg/authentication"
-	"ran/pkg/scopes"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/validate"
+	"github.com/tdeslauriers/ran/pkg/authentication"
+	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
 const (

@@ -1,4 +1,4 @@
-module ran
+module github.com/tdeslauriers/ran
 
 go 1.23.9
 

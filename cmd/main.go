@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"ran/internal/util"
-	"ran/pkg/s2s"
 
 	"github.com/tdeslauriers/carapace/pkg/config"
+	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/pkg/s2s"
 )
 
 func main() {

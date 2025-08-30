@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"ran/internal/util"
-	"ran/pkg/scopes"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
+	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
 // ScopesHanlder provides http handlers for service client requests to update assigned scopes
