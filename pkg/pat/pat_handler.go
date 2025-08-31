@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
@@ -101,13 +102,8 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 	// generate the PAT
 	pat, err := h.service.GeneratePat(cmd.Slug)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to generate pat for client slug '%s': %v", cmd.Slug, err)
-		h.logger.Error(errMsg)
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusInternalServerError,
-			Message:    errMsg,
-		}
-		e.SendJsonErr(w)
+		h.logger.Error(fmt.Sprintf("failed to generate pat: %v", err.Error()))
+		h.respondServiceError(err, w)
 		return
 	}
 
@@ -120,6 +116,44 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "failed to encode pat json response",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+}
+
+// respondServiceError is a helper method to respond with error messages and the correct http code
+// if the underlying service fails
+func (h *handler) respondServiceError(err error, w http.ResponseWriter) {
+
+	switch {
+	case strings.Contains(err.Error(), "disabled"):
+	case strings.Contains(err.Error(), "locked"):
+	case strings.Contains(err.Error(), "expired"):
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusForbidden,
+			Message:    err.Error(),
+		}
+		e.SendJsonErr(w)
+		return
+	case strings.Contains(err.Error(), "not found"):
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusNotFound,
+			Message:    err.Error(),
+		}
+		e.SendJsonErr(w)
+		return
+	case strings.Contains(err.Error(), "invalid"):
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusUnprocessableEntity,
+			Message:    err.Error(),
+		}
+		e.SendJsonErr(w)
+		return
+	default:
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return

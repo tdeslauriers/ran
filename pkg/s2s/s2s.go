@@ -199,6 +199,8 @@ func (s *s2s) Run() error {
 	mux.HandleFunc("/clients/scopes", clientHanlder.HandleScopes)
 
 	// pat token endpoints
+	patHandler := pat.NewHandler(s.patTokener, s.s2sVerifier, s.iamVerifier)
+	mux.HandleFunc("/generate/pat", patHandler.HandleGeneratePat)
 
 	s2sServer := &connect.TlsServer{
 		Addr:      s.config.ServicePort,

@@ -98,6 +98,8 @@ func (s *service) GeneratePat(slug string) (*Pat, error) {
 			if expired {
 				return nil, fmt.Errorf("client (slug '%s') account has expired", slug)
 			}
+
+			return nil, fmt.Errorf("client (slug '%s') not found", slug)
 		} else {
 			return nil, fmt.Errorf("failed to retrieve client record for slug %s: %v", slug, err)
 		}
@@ -142,7 +144,7 @@ func (s *service) GeneratePat(slug string) (*Pat, error) {
 
 	// persist the xref record
 	xref := PatClientXref{
-		Id :        0, // autoincrement
+		Id:        0, // autoincrement
 		PatID:     patId.String(),
 		ClientID:  client.Id,
 		CreatedAt: data.CustomTime{Time: time.Now().UTC()},
