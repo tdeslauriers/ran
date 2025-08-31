@@ -46,3 +46,25 @@ CREATE TABLE IF NOT EXISTS refresh (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_refreshindex ON refresh(refresh_index);
 CREATE INDEX IF NOT EXISTS idx_client_index ON refresh(client_index);
+
+CREATE TABLE IF NOT EXISTS pat (
+    uuid CHAR(36) PRIMARY KEY,
+    pat_index VARCHAR(128) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT UTC_TIMESTAMP,
+    active BOOLEAN NOT NULL,
+    revoked BOOLEAN NOT NULL,
+    expired BOOLEAN NOT NULL
+);
+CREATE UINIQUE INDEX IF NOT EXISTS idx_pat_uuid ON pat(uuid);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pat_index ON pat(pat_index);
+
+CREATE TABLE IF NOT EXISTS pat_client (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    pat_uuid CHAR(36) NOT NULL,
+    client_uuid CHAR(36) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT UTC_TIMESTAMP,
+    CONSTRAINT fk_pat_client_xref_id FOREIGN KEY (pat_uuid) REFERENCES pat (uuid),
+    CONSTRAINT fk_client_pat_xref_id FOREIGN KEY (client_uuid) REFERENCES client (uuid)
+);
+CREATE INDEX IF NOT EXISTS idx_pat_client_xref ON pat_client(pat_uuid);
+CREATE INDEX IF NOT EXISTS idx_client_pat_xref ON pat_client(client_uuid);

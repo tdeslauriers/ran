@@ -13,12 +13,14 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/diagnostics"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
+	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/carapace/pkg/schedule"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/carapace/pkg/sign"
 	"github.com/tdeslauriers/ran/internal/util"
 	"github.com/tdeslauriers/ran/pkg/authentication"
 	"github.com/tdeslauriers/ran/pkg/clients"
+	"github.com/tdeslauriers/ran/pkg/pat"
 	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
@@ -79,16 +81,6 @@ func New(config config.Config) (S2s, error) {
 	// for blind index generation and lookups
 	dbIndexer := data.NewIndexer(dbHmacSecret)
 
-	// service specific env variable
-	envCredSecret, ok := os.LookupEnv("RAN_HMAC_S2S_AUTH_SECRET")
-	if !ok {
-		return nil, fmt.Errorf("RAN_HMAC_S2S_AUTH_SECRET environment variable is not set")
-	}
-	credHmacSecret, err := base64.StdEncoding.DecodeString(envCredSecret)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode service credentials secret: %v", err)
-	}
-
 	// field level encryption
 	aes, err := base64.StdEncoding.DecodeString(config.Database.FieldSecret)
 	if err != nil {
@@ -96,6 +88,14 @@ func New(config config.Config) (S2s, error) {
 	}
 
 	cryptor := data.NewServiceAesGcmKey(aes)
+
+	// pat tokener
+	pepper, err := base64.StdEncoding.DecodeString(config.Pat.Pepper)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode pat pepper: %v", err)
+	}
+
+	tokener := exo.NewPatTokener(pepper)
 
 	// jwt signer
 	s2sPrivateKey, err := sign.ParsePrivateEcdsaCert(config.Jwt.S2sSigningKey)
@@ -112,6 +112,16 @@ func New(config config.Config) (S2s, error) {
 	}
 
 	// cred service
+	// ran service specific env variable
+	envCredSecret, ok := os.LookupEnv("RAN_HMAC_S2S_AUTH_SECRET")
+	if !ok {
+		return nil, fmt.Errorf("RAN_HMAC_S2S_AUTH_SECRET environment variable is not set")
+	}
+	credHmacSecret, err := base64.StdEncoding.DecodeString(envCredSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode service credentials secret: %v", err)
+	}
+
 	credSvc := authentication.NewCredService(credHmacSecret)
 
 	return &s2s{
@@ -122,6 +132,7 @@ func New(config config.Config) (S2s, error) {
 		iamVerifier:    jwt.NewVerifier(config.ServiceName, iamPublicKey),
 		authService:    authentication.NewS2sAuthService(repository, s2sSigner, dbIndexer, cryptor, credSvc),
 		credService:    credSvc,
+		patTokener:     pat.NewService(repository, tokener),
 		scopesService:  scopes.NewSerivce(repository),
 		clientsService: clients.NewService(repository, credSvc),
 		cleanup:        schedule.NewCleanup(repository),
@@ -141,6 +152,7 @@ type s2s struct {
 	iamVerifier    jwt.Verifier
 	authService    types.S2sAuthService
 	credService    authentication.CredService
+	patTokener     pat.Service
 	scopesService  scopes.Service
 	clientsService clients.Service
 	cleanup        schedule.Cleanup
@@ -157,36 +169,36 @@ func (s s2s) CloseDb() error {
 
 func (s *s2s) Run() error {
 
-	loginHander := authentication.NewS2sLoginHandler(s.authService)
-	refreshHandler := authentication.NewS2sRefreshHandler(s.authService)
-
-	s2sScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, nil) // user jwt verifier not needed
-	iamScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, s.iamVerifier)
-
-	clientHanlder := clients.NewHandler(s.clientsService, s.scopesService, s.s2sVerifier, s.iamVerifier)
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", diagnostics.HealthCheckHandler)
 
+	loginHander := authentication.NewS2sLoginHandler(s.authService)
 	mux.HandleFunc("/login", loginHander.HandleS2sLogin)
+
+	refreshHandler := authentication.NewS2sRefreshHandler(s.authService)
 	mux.HandleFunc("/refresh", refreshHandler.HandleS2sRefresh)
 
 	// scopes endpoint for services (not user facing)
 	// requires s2s service-call-specific scopes
+	s2sScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, nil) // user jwt verifier not needed
 	mux.HandleFunc("/s2s/scopes", s2sScopesHandler.HandleScopes)
 	mux.HandleFunc("/s2s/scopes/active", s2sScopesHandler.HandleActiveScopes)
 
 	// scopes endpoint for users, ie, admin
+	iamScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, s.iamVerifier)
 	mux.HandleFunc("/scopes", iamScopesHandler.HandleScopes)
 	mux.HandleFunc("/scopes/active", iamScopesHandler.HandleActiveScopes)
 	mux.HandleFunc("/scopes/add", iamScopesHandler.HandleAdd)
 	mux.HandleFunc("/scopes/", iamScopesHandler.HandleScope)
 
+	clientHanlder := clients.NewHandler(s.clientsService, s.scopesService, s.s2sVerifier, s.iamVerifier)
 	mux.HandleFunc("/clients", clientHanlder.HandleClients)
 	mux.HandleFunc("/clients/register", clientHanlder.HandleRegistration)
 	mux.HandleFunc("/clients/reset", clientHanlder.HandleReset)
 	mux.HandleFunc("/clients/", clientHanlder.HandleClient)
 	mux.HandleFunc("/clients/scopes", clientHanlder.HandleScopes)
+
+	// pat token endpoints
 
 	s2sServer := &connect.TlsServer{
 		Addr:      s.config.ServicePort,

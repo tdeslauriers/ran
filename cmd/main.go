@@ -33,6 +33,7 @@ func main() {
 			Db:               true,
 			IndexSecret:      true,
 			AesSecret:        true,
+			PatGenerator:     true,
 			S2sSigningKey:    true,
 			S2sVerifyingKey:  true,
 			UserSigningKey:   false,
