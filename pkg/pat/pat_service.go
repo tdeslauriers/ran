@@ -207,7 +207,7 @@ func (s *service) IntrospectPat(token string) (*pat.IntrospectResponse, error) {
 	}
 
 	// decode token from base64 url encoding
-	raw, err := base64.URLEncoding.DecodeString(token)
+	raw, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode pat token from base64 url encoding: %v", err)
 	}
