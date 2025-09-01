@@ -72,9 +72,33 @@ func (cmd *GeneratePatCmd) Validate() error {
 	return nil
 }
 
-// querys for client status checks
+// ScopePatRecord represents a query row scope + client id associated with a personal access token (PAT)
+// via xref table joins
+type ScopePatRecord struct {
+	ScopeId          string `db:"scope_uuid"`
+	ServiceName      string `db:"service_name"`
+	Scope            string `db:"scope"`
+	ScopeName        string `db:"scope_name"`
+	ScopeDescription string `db:"scope_description"`
+	ScopeCreatedAt   string `db:"scope_created_at"`
+	ScopeActive      bool   `db:"scope_active"`
+	ScopeSlug        string `db:"scope_slug"`
+	ClientId         string `db:"client_uuid"`
+}
+
+// queries for client status checks
 const (
+	clientNotFoundQry       = `SELECT EXISTS(SELECT 1 FROM client WHERE slug = ?)`
 	clientDisabledQry       = `SELECT EXISTS(SELECT 1 FROM client WHERE slug = ? AND enabled = FALSE`
 	clientAccountExpiredQry = `SELECT EXISTS(SELECT 1 FROM client WHERE slug = ? AND account_expired = TRUE`
 	clientAccountLockedQry  = `SELECT EXISTS(SELECT 1 FROM client WHERE slug = ? AND account_locked = TRUE`
+)
+
+// queries for pat status checks
+const (
+	// check if none found because of issues with the pat
+	patNotFoundQry = `SELECT EXISTS(SELECT 1 FROM pat WHERE pat_index = ?)`
+	patInactiveQry = `SELECT EXISTS(SELECT 1 FROM pat WHERE pat_index = ? AND active = FALSE)`
+	patRevokedQry  = `SELECT EXISTS(SELECT 1 FROM pat WHERE pat_index = ? AND revoked = TRUE)`
+	patExpiredQry  = `SELECT EXISTS(SELECT 1 FROM pat WHERE pat_index = ? AND expired = TRUE)`
 )

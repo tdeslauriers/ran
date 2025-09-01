@@ -9,18 +9,25 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
+	"github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/ran/internal/util"
 )
 
 // authorization scopes required
 // There is no read scope for PATs, as they are post only endpoints
-var requiredScopes = []string{"w:ran:*", "w:ran:generate:pat:*"}
+var (
+	requiredPatGenScopes        = []string{"w:ran:*", "w:ran:generate:pat:*"}
+	requiredPatIntrospectScopes = []string{"r:ran:*", "r:ran:introspect:*"}
+)
 
 // Handler provides methods for handling personal access token (PAT) operations
 type Handler interface {
 
 	// HandleGeneratePat handles a request to generate a personal access token (PAT)
 	HandleGeneratePat(w http.ResponseWriter, r *http.Request)
+
+	// HandleIntrospectPat handles a request to introspect a personal access token (PAT)
+	HandleIntrospectPat(w http.ResponseWriter, r *http.Request)
 }
 
 // NewHandler creates a new personal access token (PAT) handler interface abstracting a concrete implementation
@@ -60,7 +67,7 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 
 	// check service authorization
 	svcToken := r.Header.Get("Service-Authorization")
-	if _, err := h.s2s.BuildAuthorized(requiredScopes, svcToken); err != nil {
+	if _, err := h.s2s.BuildAuthorized(requiredPatGenScopes, svcToken); err != nil {
 		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -68,7 +75,7 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 
 	// check user access token
 	userToken := r.Header.Get("Authorization")
-	authorized, err := h.iam.BuildAuthorized(requiredScopes, userToken)
+	authorized, err := h.iam.BuildAuthorized(requiredPatGenScopes, userToken)
 	if err != nil {
 		h.logger.Error(fmt.Sprintf("failed to validate user token: %v", err.Error()))
 		connect.RespondAuthFailure(connect.User, err, w)
@@ -119,6 +126,102 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 		}
 		e.SendJsonErr(w)
 		return
+	}
+}
+
+// HandleIntrospectPat is the concrete implementation of the interface method which
+// handles a request to introspect a personal access token (PAT)
+func (h *handler) HandleIntrospectPat(w http.ResponseWriter, r *http.Request) {
+
+	// validate the method is POST
+	if r.Method != http.MethodPost {
+		h.logger.Error(fmt.Sprintf("method %s not allowed on /introspect endpoint", r.Method))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "method not allowed on /introspect endpoint",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate s2s authorization
+	// Only internal, authorized services can call /introspect
+	svcToken := r.Header.Get("Service-Authorization")
+	if _, err := h.s2s.BuildAuthorized(requiredPatIntrospectScopes, svcToken); err != nil {
+		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
+		connect.RespondAuthFailure(connect.S2s, err, w)
+		return
+	}
+
+	// decode request body
+	var token pat.IntrospectCmd
+	if err := json.NewDecoder(r.Body).Decode(&token); err != nil {
+		errMsg := fmt.Sprintf("failed to decode request body: %v", err)
+		h.logger.Error(errMsg)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    errMsg,
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate request formatting
+	if err := token.Validate(); err != nil {
+		h.logger.Error("failed to validate introspect cmd", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusUnprocessableEntity,
+			Message:    err.Error(),
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// get introspection results
+	result, err := h.service.IntrospectPat(token.Token)
+	if err != nil {
+		// if result is nil, we have a service error
+		if result == nil {
+			h.logger.Error(fmt.Sprintf("failed to introspect pat: %v", err.Error()))
+			h.respondServiceError(err, w)
+			return
+		}
+
+		// otherwise, we have a valid response with not found, revoked, expired, or inactive status
+		if result != nil {
+			// log the error because it isnt a service error, only an issue with the token itself
+			h.logger.Error(fmt.Sprintf("introspection yielded a pat error: %v", err.Error()))
+
+			// return a successful introspection that yeilds an active == false status
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			if err := json.NewEncoder(w).Encode(result); err != nil {
+				h.logger.Error(fmt.Sprintf("failed to encode pat introspection json response: %v", err.Error()))
+				e := connect.ErrorHttp{
+					StatusCode: http.StatusInternalServerError,
+					Message:    "failed to encode pat introspection json response",
+				}
+				e.SendJsonErr(w)
+				return
+			}
+		}
+	}
+
+	// successful introspection --> active, not revoked, not expired set of scopes found
+	if result != nil {
+		h.logger.Info(fmt.Sprintf("pat token introspected for client '%s'", result.ServiceName))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(result); err != nil {
+			h.logger.Error(fmt.Sprintf("failed to encode pat introspection json response: %v", err.Error()))
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "failed to encode pat introspection json response",
+			}
+			e.SendJsonErr(w)
+			return
+		}
 	}
 }
 
