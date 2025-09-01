@@ -17,7 +17,7 @@ import (
 // There is no read scope for PATs, as they are post only endpoints
 var (
 	requiredPatGenScopes        = []string{"w:ran:*", "w:ran:generate:pat:*"}
-	requiredPatIntrospectScopes = []string{"r:ran:*", "r:ran:introspect:*"}
+	requiredPatIntrospectScopes = []string{"w:ran:*", "w:ran:introspect:*"}
 )
 
 // Handler provides methods for handling personal access token (PAT) operations
