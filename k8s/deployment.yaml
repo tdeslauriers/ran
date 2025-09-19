@@ -111,6 +111,11 @@ spec:
                 secretKeyRef:
                   name: secret-s2s-cred-hmac
                   key: hmac-auth-pepper
+            - name: RAN_PAT_PEPPER
+              valueFrom:
+                secretKeyRef:
+                  name: secret-s2s-cred-hmac
+                  key: hmac-pat-pepper
           resources:
             limits:
               memory: "128Mi"
