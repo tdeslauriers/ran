@@ -232,10 +232,10 @@ func (s *service) IntrospectPat(token string) (*pat.IntrospectResponse, error) {
 			s.created_at AS scope_created_at,
 			s.active AS scope_active,
 			s.slug AS scope_slug,
-			c.uuid AS client_uuid,
+			c.uuid AS client_uuid
 		FROM scope s
-			LEFT OUTER JOIN scope_client sc ON s.uuid = sc.scope_uuid
-			LEFT OUTER JOIN client c ON sc.client_uuid = c.uuid
+			LEFT OUTER JOIN client_scope cs ON s.uuid = cs.scope_uuid
+			LEFT OUTER JOIN client c ON cs.client_uuid = c.uuid
 			LEFT OUTER JOIN pat_client pc ON c.uuid = pc.client_uuid
 			LEFT OUTER JOIN pat p ON pc.pat_uuid = p.uuid
 		WHERE p.pat_index = ?
