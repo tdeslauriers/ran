@@ -70,8 +70,7 @@ func BenchmarkCredService_GenerateBcryptHash(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, err := bcrypt.GenerateFromPassword([]byte(pw), cost)
-		if err != nil {
-			b.Fatalf("GenerateFromPassword failed: %v", err)
+-			b.Fatalf("GenerateFromPassword failed: %v", err)
 		}
 
 	}

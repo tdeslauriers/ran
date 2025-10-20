@@ -27,11 +27,15 @@ export RAN_DATABASE_HMAC_INDEX_SECRET=$(op read "op://world_site/ran_hmac_index_
 # Field level encryption key for database fields
 export RAN_FIELD_LEVEL_AES_GCM_SECRET=$(op read "op://world_site/ran_aes_gcm_secret_dev/secret")
 
+export RAN_PAT_PEPPER=$(op read "op://world_site/ran_pat_pepper_secret_dev/secret")
+
 # client/s2s JWT signing key --> sign the jwt and provide verifying key to validate the jwt to client services
 export RAN_S2S_JWT_SIGNING_KEY=$(op read "op://world_site/ran_jwt_key_pair_dev/signing_key")
 export RAN_S2S_JWT_VERIFYING_KEY=$(op read "op://world_site/ran_jwt_key_pair_dev/verifying_key")
 
 # user JWT verifying key -->  validate the the user's jwt
 export RAN_USER_JWT_VERIFYING_KEY=$(op read "op://world_site/shaw_jwt_key_pair_dev/verifying_key")
+
+export RAN_HMAC_S2S_AUTH_SECRET=$(op read "op://world_site/ran_hmac_auth_secret_dev/secret")
 
 

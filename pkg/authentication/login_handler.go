@@ -53,7 +53,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	var cmd types.S2sLoginCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
-		h.logger.Error("failed to decode json s2s login payload: %v", "err", err.Error())
+		h.logger.Error(fmt.Sprintf("failed to decode s2s login payload: %v", err.Error()))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "Failed to decode json s2s login payload.",
@@ -64,9 +64,9 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	// input validation
 	if err := cmd.ValidateCmd(); err != nil {
-		h.logger.Error("unable to validate login cmd format: %v", "err", err.Error())
+		h.logger.Error(fmt.Sprintf("failed to validate login cmd format: %v", err.Error()))
 		e := connect.ErrorHttp{
-			StatusCode: http.StatusBadRequest,
+			StatusCode: http.StatusUnprocessableEntity,
 			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
@@ -94,7 +94,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		e.SendJsonErr(w)
 	}
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("unable to get scope for client id %s", cmd.ClientId), "err", err.Error())
+		h.logger.Error(fmt.Sprintf("unable to get scope for client id %s: %v", cmd.ClientId, err))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    loginFailedMsg,
@@ -114,7 +114,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	// set up jwt claims fields
 	jti, err := uuid.NewRandom()
 	if err != nil {
-		h.logger.Error("unable to create jwt jti uuid", "err", err.Error())
+		h.logger.Error(fmt.Sprintf("failed to create jti for s2s token: %v", err.Error()))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "failed to mint s2s token",
@@ -139,7 +139,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	// create token
 	token, err := h.authService.MintToken(claims)
 	if err != nil {
-		h.logger.Error("failed to mint s2s token: %v", "err", err.Error())
+		h.logger.Error(fmt.Sprintf("%s: %v", loginFailedMsg, err.Error()))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    loginFailedMsg,
@@ -151,7 +151,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	// create refresh
 	refreshToken, err := uuid.NewRandom()
 	if err != nil {
-		h.logger.Error("failed to create refresh token: %v", "err", err.Error())
+		h.logger.Error(fmt.Sprintf("failed to create s2s refresh token: %v", err.Error()))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    loginFailedMsg,
@@ -174,7 +174,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		err := h.authService.PersistRefresh(r) // encrypts refresh token
 		if err != nil {
 			// only logging since refresh is a convenience
-			h.logger.Error("error persisting s2s refresh token: %v", "err", err.Error())
+			h.logger.Error(fmt.Sprintf("failed to persist s2s refresh token for client id %s: %v", cmd.ClientId, err.Error()))
 		}
 	}(refresh)
 
@@ -190,7 +190,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(authz); err != nil {
-		h.logger.Error("failed to marshal/send s2s login response body: %v", "err", err.Error())
+		h.logger.Error(fmt.Sprintf("failed to marshal/send s2s login response body: %v", err.Error()))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "failed to send s2s login response body due to interal service error",
