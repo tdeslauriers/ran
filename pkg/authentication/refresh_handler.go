@@ -1,6 +1,7 @@
 package authentication
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -17,29 +18,45 @@ import (
 	"github.com/tdeslauriers/ran/internal/util"
 )
 
+// S2sRefreshHandler provides methods for handling s2s token refresh operations
 type S2sRefreshHandler interface {
 	HandleS2sRefresh(w http.ResponseWriter, r *http.Request)
 }
 
+// NewS2sRefreshHandler creates a new s2s token refresh handler interface returning
+// a pointer to a concrete implementation
 func NewS2sRefreshHandler(service types.S2sAuthService) S2sRefreshHandler {
 	return &s2sRefreshHandler{
 		authService: service,
 
-		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentRefresh)),
+		logger: slog.Default().
+			With(slog.String(util.PackageKey, util.PackageAuthentication)).
+			With(slog.String(util.ComponentKey, util.ComponentRefresh)),
 	}
 }
 
 var _ S2sRefreshHandler = (*s2sRefreshHandler)(nil)
 
+// s2sRefreshHandler is a concrete implementation of the S2sRefreshHandler interface
 type s2sRefreshHandler struct {
 	authService types.S2sAuthService
 
 	logger *slog.Logger
 }
 
+// HandleS2sRefresh is the concrete implementation of the interface method which
+// handles a request to refresh a s2s token using a refresh token
 func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Request) {
 
+	// generate telemetry
+	tel := connect.NewTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
+
+	// add telemetry to context for downstream calls + service functions
+	ctx := context.WithValue(r.Context(), connect.TelemetryKey, tel)
+
 	if r.Method != "POST" {
+		log.Error("invalid method for s2s refresh endpoint", "err", "only POST method is allowed")
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
 			Message:    "only POST http method allowed",
@@ -50,7 +67,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	var cmd types.S2sRefreshCmd
 	err := json.NewDecoder(r.Body).Decode(&cmd)
 	if err != nil {
-		h.logger.Error("failed to decode s2s refresh cmd request body", "err", err.Error())
+		log.Error("failed to decode s2s refresh cmd request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "s2s refresh request improperly formatted json",
@@ -61,7 +78,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 	// validate request formatting
 	if err := cmd.ValidateCmd(); err != nil {
-		h.logger.Error("failed to validate refresh token format", "err", err.Error())
+		log.Error("failed to validate refresh token format", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    err.Error(),
@@ -71,13 +88,12 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	}
 
 	// lookup refresh token
-	refresh, err := h.authService.GetRefreshToken(cmd.RefreshToken)
+	refresh, err := h.authService.GetRefreshToken(ctx, cmd.RefreshToken)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to get refresh token: %v", err)
-		h.logger.Error(errMsg)
+		log.Error("failed to lookup s2s refresh token", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
-			Message:    errMsg,
+			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return
@@ -86,7 +102,8 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 	// check if refresh is for service requested
 	// this check secondary, but may indicate malicous request
 	if refresh != nil && refresh.ServiceName != cmd.ServiceName {
-		h.logger.Error(fmt.Sprintf("refresh id %s - refresh token requested for incorrect service: requested: %s, refresh token: %s", refresh.Uuid, cmd.ServiceName, refresh.ServiceName))
+		log.Error(fmt.Sprintf("refresh id %s: refresh token requested for incorrect service", refresh.Uuid),
+			slog.String("err", fmt.Sprintf("requested %s, wanted %s", cmd.ServiceName, refresh.ServiceName)))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
 			Message:    "incorrect service name provided",
@@ -100,18 +117,18 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		// get scopes
 		scopes, err := h.authService.GetScopes(refresh.ClientId, refresh.ServiceName)
 		if len(scopes) < 1 {
-			h.logger.Error(fmt.Sprintf("client id %s has no scopes for this %s", refresh.ClientId, cmd.ServiceName))
+			log.Error(fmt.Sprintf("client id %s has no %s scopes assigned to it", refresh.ClientId, cmd.ServiceName))
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusUnauthorized,
-				Message:    "client has no scopes for this service",
+				Message:    fmt.Sprintf("client id %s has no %s scopes assigned to it", refresh.ClientId, cmd.ServiceName),
 			}
 			e.SendJsonErr(w)
 		}
 		if err != nil {
-			h.logger.Error(fmt.Sprintf("failed to get scopes for client id %s", refresh.ClientId), "err", err.Error())
+			log.Error(fmt.Sprintf("failed to get scopes for client id %s", refresh.ClientId), "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
-				Message:    loginFailedMsg,
+				Message:    err.Error(),
 			}
 			e.SendJsonErr(w)
 		}
@@ -128,7 +145,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		// set up jwt claims fields
 		jti, err := uuid.NewRandom()
 		if err != nil {
-			h.logger.Error("unable to create jwt jti uuid", "err", err.Error())
+			log.Error("unable to create jwt jti uuid", "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
 				Message:    "failed to mint s2s token",
@@ -153,7 +170,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		// mint new token
 		token, err := h.authService.MintToken(claims)
 		if err != nil {
-			h.logger.Error(fmt.Sprintf("failed to mint new jwt for client id %s", refresh.ClientId), "err", err.Error())
+			log.Error(fmt.Sprintf("failed to mint refreshed jwt for client id %s", refresh.ClientId), "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
 				Message:    "failed to mint new s2s token from refresh token",
@@ -165,10 +182,11 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		// oppotunistically delete claimed refresh token
 		go func(token string) {
 			if err := h.authService.DestroyRefresh(token); err != nil {
-				h.logger.Error(fmt.Sprintf("failed to delete claimed refresh token record uuid %s", refresh.Uuid), "err", err.Error())
+				log.Error(fmt.Sprintf("failed to delete claimed refresh token record uuid %s", refresh.Uuid), "err", err.Error())
 				return
 			}
-			h.logger.Info(fmt.Sprintf("deleted claimed refresh token record uuid %s", refresh.Uuid))
+
+			log.Info(fmt.Sprintf("deleted claimed refresh token record uuid %s", refresh.Uuid))
 		}(refresh.RefreshToken)
 
 		// respond with authorization data
@@ -181,14 +199,14 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			RefreshExpires: data.CustomTime{Time: refresh.CreatedAt.Add(RefreshDuration * time.Minute)}, //  same expiry
 		}
 
-		h.logger.Info(fmt.Sprintf("successfully refreshed and minted new s2s token for client id %s", refresh.ClientId))
+		log.Info(fmt.Sprintf("successfully refreshed and minted new s2s token for client id %s", refresh.ClientId))
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(authz); err != nil {
-			h.logger.Error("failed to marshal/send s2s refresh response body", "err", err.Error())
+			log.Error("failed to json encode s2s refresh response body", "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
-				Message:    "failed to send s2s refresh response body due to interal service error",
+				Message:    "failed to json encode s2s refresh response body",
 			}
 			e.SendJsonErr(w)
 			return

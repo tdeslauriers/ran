@@ -36,7 +36,6 @@ func NewCredService(secret []byte) CredService {
 		secret: secret,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceS2s)).
 			With(slog.String(util.ComponentKey, util.ComponentCreds)).
 			With(slog.String(util.PackageKey, util.PackageAuthentication)),
 	}
@@ -60,7 +59,6 @@ func (c *credService) GenerateAccessToken() (string, error) {
 	for i := range token {
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charSet))))
 		if err != nil {
-			c.logger.Error(fmt.Sprintf("failed to generate random number: %v", err))
 			return "", err
 		}
 

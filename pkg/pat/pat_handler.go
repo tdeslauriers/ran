@@ -59,16 +59,26 @@ type handler struct {
 // handles a request to generate a personal access token (PAT)
 func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 
+	// generate telemetry
+	tel := connect.NewTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
+
 	// validate the method is POST
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed on /generate/pat endpoint", http.StatusMethodNotAllowed)
+		log.Error(fmt.Sprintf("method %s not allowed", r.Method),
+			slog.String("err", "only POST method is allowed"))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "method not allowed",
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
 	// check service authorization
 	svcToken := r.Header.Get("Service-Authorization")
 	if _, err := h.s2s.BuildAuthorized(requiredPatGenScopes, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
@@ -77,7 +87,7 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 	userToken := r.Header.Get("Authorization")
 	authorized, err := h.iam.BuildAuthorized(requiredPatGenScopes, userToken)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate user token: %v", err.Error()))
+		log.Error("failed to validate user token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
@@ -85,11 +95,10 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 	// decode request body
 	var cmd GeneratePatCmd
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-		errMsg := fmt.Sprintf("failed to decode request body: %v", err)
-		h.logger.Error(errMsg)
+		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
-			Message:    errMsg,
+			Message:    "failed to json decode request body",
 		}
 		e.SendJsonErr(w)
 		return
@@ -97,7 +106,7 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 
 	// validate request formatting
 	if err := cmd.Validate(); err != nil {
-		h.logger.Error("failed to validate generate pat cmd", "err", err.Error())
+		log.Error("failed to validate generate pat cmd", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnprocessableEntity,
 			Message:    err.Error(),
@@ -109,17 +118,17 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 	// generate the PAT
 	pat, err := h.service.GeneratePat(cmd.Slug)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to generate pat: %v", err.Error()))
+		log.Error("failed to generate pat token", "err", err.Error())
 		h.respondServiceError(err, w)
 		return
 	}
 
-	h.logger.Info(fmt.Sprintf("pat token generated for client '%s' by user '%s'", pat.Client, authorized.Claims.Subject))
+	log.Info(fmt.Sprintf("pat token generated for client '%s' by user '%s'", pat.Client, authorized.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(pat); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to encode pat json response: %v", err.Error()))
+		log.Error("failed to encode pat json response", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "failed to encode pat json response",
@@ -133,12 +142,16 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 // handles a request to introspect a personal access token (PAT)
 func (h *handler) HandleIntrospectPat(w http.ResponseWriter, r *http.Request) {
 
+	// generate telemetry
+	tel := connect.NewTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
+
 	// validate the method is POST
 	if r.Method != http.MethodPost {
-		h.logger.Error(fmt.Sprintf("method %s not allowed on /introspect endpoint", r.Method))
+		log.Error(fmt.Sprintf("method %s not allowed", r.Method))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "method not allowed on /introspect endpoint",
+			Message:    "method not allowed",
 		}
 		e.SendJsonErr(w)
 		return
@@ -148,7 +161,7 @@ func (h *handler) HandleIntrospectPat(w http.ResponseWriter, r *http.Request) {
 	// Only internal, authorized services can call /introspect
 	svcToken := r.Header.Get("Service-Authorization")
 	if _, err := h.s2s.BuildAuthorized(requiredPatIntrospectScopes, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
@@ -156,11 +169,10 @@ func (h *handler) HandleIntrospectPat(w http.ResponseWriter, r *http.Request) {
 	// decode request body
 	var token pat.IntrospectCmd
 	if err := json.NewDecoder(r.Body).Decode(&token); err != nil {
-		errMsg := fmt.Sprintf("failed to decode request body: %v", err)
-		h.logger.Error(errMsg)
+		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
-			Message:    errMsg,
+			Message:    "failed to json decode request body",
 		}
 		e.SendJsonErr(w)
 		return
@@ -168,7 +180,7 @@ func (h *handler) HandleIntrospectPat(w http.ResponseWriter, r *http.Request) {
 
 	// validate request formatting
 	if err := token.Validate(); err != nil {
-		h.logger.Error("failed to validate introspect cmd", "err", err.Error())
+		log.Error("failed to validate introspect cmd", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnprocessableEntity,
 			Message:    err.Error(),
@@ -182,39 +194,38 @@ func (h *handler) HandleIntrospectPat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// if result is nil, we have a service error
 		if result == nil {
-			h.logger.Error(fmt.Sprintf("failed to introspect pat: %v", err.Error()))
+			log.Error("failed to introspect pat token", "err", err.Error())
 			h.respondServiceError(err, w)
 			return
 		}
 
 		// otherwise, we have a valid response with not found, revoked, expired, or inactive status
-		if result != nil {
-			// log the error because it isnt a service error, only an issue with the token itself
-			h.logger.Error(fmt.Sprintf("introspection yielded a pat error: %v", err.Error()))
+		// log the error because it isnt a service error, only an issue with the token itself
+		log.Error(fmt.Sprintf("introspection yielded a pat error: %v", err.Error()))
 
-			// return a successful introspection that yeilds an active == false status
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			if err := json.NewEncoder(w).Encode(result); err != nil {
-				h.logger.Error(fmt.Sprintf("failed to encode pat introspection json response: %v", err.Error()))
-				e := connect.ErrorHttp{
-					StatusCode: http.StatusInternalServerError,
-					Message:    "failed to encode pat introspection json response",
-				}
-				e.SendJsonErr(w)
-				return
+		// return a successful introspection that yeilds an active == false status
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if err := json.NewEncoder(w).Encode(result); err != nil {
+			log.Error("failed to encode pat introspection json response", "err", err.Error())
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusInternalServerError,
+				Message:    "failed to encode pat introspection json response",
 			}
+			e.SendJsonErr(w)
+			return
 		}
+
 	}
 
 	// successful introspection --> active, not revoked, not expired set of scopes found
 	if result != nil {
-		h.logger.Info(fmt.Sprintf("pat token introspected for client '%s'", result.ServiceName))
+		log.Info(fmt.Sprintf("pat token introspected for client '%s'", result.ServiceName))
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(result); err != nil {
-			h.logger.Error(fmt.Sprintf("failed to encode pat introspection json response: %v", err.Error()))
+			log.Error("failed to encode pat introspection json response", "err", err.Error())
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusInternalServerError,
 				Message:    "failed to encode pat introspection json response",
