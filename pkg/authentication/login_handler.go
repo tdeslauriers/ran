@@ -19,10 +19,15 @@ import (
 
 const loginFailedMsg string = "login failed due to server error."
 
+// LoginHandler provides methods for handling s2s login operations
 type LoginHandler interface {
+
+	// HandleS2sLogin handles a request to login to a s2s service using client credentials
 	HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 }
 
+// NewS2sLoginHandler creates a new s2s login handler interface returning
+// a pointer to a concrete implementation
 func NewS2sLoginHandler(service types.S2sAuthService) LoginHandler {
 	return &s2sLoginHandler{
 		authService: service,
@@ -35,16 +40,19 @@ func NewS2sLoginHandler(service types.S2sAuthService) LoginHandler {
 
 var _ LoginHandler = (*s2sLoginHandler)(nil)
 
+// s2sLoginHandler is a concrete implementation of the LoginHandler interface
 type s2sLoginHandler struct {
 	authService types.S2sAuthService
 
 	logger *slog.Logger
 }
 
+// HandleS2sLogin is the concrete implementation of the interface method which
+// handles a request to login to a s2s service using client credentials
 func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request) {
 
-	// generate telemetry
-	tel := connect.NewTelemetry(r, h.logger)
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	if r.Method != "POST" {

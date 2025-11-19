@@ -59,8 +59,8 @@ type handler struct {
 // handles a request to generate a personal access token (PAT)
 func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 
-	// generate telemetry
-	tel := connect.NewTelemetry(r, h.logger)
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate the method is POST

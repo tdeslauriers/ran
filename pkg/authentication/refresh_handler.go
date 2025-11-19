@@ -20,6 +20,8 @@ import (
 
 // S2sRefreshHandler provides methods for handling s2s token refresh operations
 type S2sRefreshHandler interface {
+
+	// HandleS2sRefresh handles a request to refresh a s2s jwt token using a refresh token
 	HandleS2sRefresh(w http.ResponseWriter, r *http.Request)
 }
 
@@ -48,8 +50,8 @@ type s2sRefreshHandler struct {
 // handles a request to refresh a s2s token using a refresh token
 func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Request) {
 
-	// generate telemetry
-	tel := connect.NewTelemetry(r, h.logger)
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// add telemetry to context for downstream calls + service functions
