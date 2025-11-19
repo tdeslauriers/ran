@@ -105,7 +105,7 @@ func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, err
 		WHERE cs.client_uuid = ?
 			AND s.service_name = ?`
 	if err := s.sql.SelectRecords(qry, &scopes, clientId, service); err != nil {
-		s.logger.Error(fmt.Sprintf("failed to retrieve scopes for client %s", clientId), "err", err.Error())
+		s.logger.Error(fmt.Sprintf("failed to retrieve scopes for client %s: %v", clientId, err))
 		return scopes, fmt.Errorf("failed to retrieve scopes for client %s", clientId)
 	}
 

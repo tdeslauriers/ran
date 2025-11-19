@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Service client id and port
-export RAN_SERVICE_CLIENT_ID=$(op read "op://world_site/ran_service_app_local/client_id")
-export RAN_SERVICE_PORT=":$(op read "op://world_site/ran_service_app_local/port")"
+export RAN_SERVICE_CLIENT_ID=$(op read "op://world_site/ran_service_container_dev/client_id")
+export RAN_SERVICE_PORT=":$(op read "op://world_site/ran_service_container_dev/port")"
 
 # certs
 export RAN_CA_CERT=$(op document get "service_ca_dev_cert" --vault world_site | base64 -w 0)

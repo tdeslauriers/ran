@@ -62,9 +62,9 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// input validation
+	// // input validation
 	if err := cmd.ValidateCmd(); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate login cmd format: %v", err.Error()))
+		h.logger.Error(fmt.Sprintf("failed to validate login cmd format: %v", err))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnprocessableEntity,
 			Message:    err.Error(),

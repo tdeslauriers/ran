@@ -1,13 +1,11 @@
 module github.com/tdeslauriers/ran
 
-go 1.23.9
-
-toolchain go1.24.0
+go 1.24.0
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/tdeslauriers/carapace v0.1.81
-	golang.org/x/crypto v0.41.0
+	github.com/tdeslauriers/carapace v0.1.86
+	golang.org/x/crypto v0.43.0
 )
 
 require (
