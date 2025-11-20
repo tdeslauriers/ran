@@ -96,7 +96,7 @@ func (a *service) GetActiveScopes() ([]types.Scope, error) {
 			WHERE active = true`
 	err := a.sql.SelectRecords(query, &scopes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get scopes records from db: %v", err)
+		return nil, err
 	}
 
 	return scopes, nil
@@ -125,13 +125,9 @@ func (s *service) GetScope(slug string) (*types.Scope, error) {
 			WHERE slug = ?`
 	if err := s.sql.SelectRecord(query, &scope, slug); err != nil {
 		if err == sql.ErrNoRows {
-			errMsg := fmt.Sprintf("no scope found for slug %s", slug)
-			s.logger.Error(errMsg)
-			return nil, errors.New(errMsg)
+			return nil, fmt.Errorf("no scope found for slug %s", slug)
 		}
-		errMsg := fmt.Sprintf("failed to retrieve scope '%s' record from db: %v", slug, err)
-		s.logger.Error(errMsg)
-		return nil, errors.New(errMsg)
+		return nil, err
 	}
 
 	return &scope, nil
