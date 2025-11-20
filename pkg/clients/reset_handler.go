@@ -26,7 +26,6 @@ func NewResetHandler(s Service, s2s, iam jwt.Verifier) ResetHandler {
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceS2s)).
 			With(slog.String(util.PackageKey, util.PackageClients)).
 			With(slog.String(util.ComponentKey, util.ComponentClients))}
 }
@@ -45,11 +44,15 @@ type resetHandler struct {
 // HandleReset is a concrete impl of the ResetHandler interface method: handles a service client password reset request
 func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
+
 	if r.Method != http.MethodPost {
-		h.logger.Error("invalid http method: only POST is allowed")
+		log.Error("invalid method", "err", "only POST method is allowed")
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "invalid http method: only POST is allowed",
+			Message:    "only POST is allowed",
 		}
 		e.SendJsonErr(w)
 		return
@@ -57,8 +60,9 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// validate s2stoken
 	svcToken := r.Header.Get("Service-Authorization")
-	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("password reset handler failed to authorize service token: %v", err.Error()))
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken)
+	if err != nil {
+		log.Error("failed to authorize s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
@@ -67,7 +71,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 	accessToken := r.Header.Get("Authorization")
 	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, accessToken)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("password reset handler failed to authorize iam token: %v", err.Error()))
+		log.Error("failed to authorize iam access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
@@ -75,11 +79,10 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 	// parse request body
 	var cmd profile.ResetCmd
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-		errMsg := fmt.Sprintf("failed to decode json reset request body: %s", err.Error())
-		h.logger.Error(errMsg)
+		log.Error("failed to decode reset password request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
-			Message:    errMsg,
+			Message:    "failed to decode reset password request body",
 		}
 		e.SendJsonErr(w)
 		return
@@ -87,7 +90,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// validate input
 	if err := cmd.ValidateCmd(); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate service client %s password reset request: %v", cmd.ResourceId, err.Error()))
+		log.Error(fmt.Sprintf("failed to validate service client %s password reset request", cmd.ResourceId), "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    err.Error(),
@@ -98,12 +101,14 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// reset client password
 	if err := h.service.ResetPassword(cmd); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to reset service client %s password: %v", cmd.ResourceId, err.Error()))
+		log.Error(fmt.Sprintf("failed to reset password for service client %s", cmd.ResourceId), "err", err.Error())
 		h.service.HandleServiceError(w, err)
 		return
 	}
 
-	h.logger.Info(fmt.Sprintf("service client %s password was reset successfully by %s", cmd.ResourceId, authorized.Claims.Subject))
+	log.Info(fmt.Sprintf("successfully reset password for service client %s", cmd.ResourceId),
+		slog.String("requesting_service", authorizedSvc.Claims.Subject),
+		slog.String("actor", authorized.Claims.Subject))
 
 	// respond with success
 	w.WriteHeader(http.StatusNoContent)

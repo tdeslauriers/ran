@@ -28,17 +28,8 @@ var userAllowedWrite []string = []string{"w:ran:scopes:*"}
 // Handler provides http handlers for scopes requests
 type Handler interface {
 
-	// HandleScopes returns all scopes, active or inactive
-	HandleScopes(w http.ResponseWriter, r *http.Request)
-
-	// HandleActiveScopes returns all active scopes
-	HandleActiveScopes(w http.ResponseWriter, r *http.Request)
-
-	// HandleAdd handles requests to add a new scope
-	HandleAdd(w http.ResponseWriter, r *http.Request)
-
 	// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
-	HandleScope(w http.ResponseWriter, r *http.Request)
+	HandleScopes(w http.ResponseWriter, r *http.Request)
 }
 
 // NewS2sHandler creates a new handler for scopes requests from services,
@@ -67,16 +58,58 @@ type handler struct {
 	logger *slog.Logger
 }
 
+// HandleScopes is the concrete implementation of the interface method
+// which handles all requests for a single scope: GET, PUT, POST, DELETE
 func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
-	if r.Method != "GET" {
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
+
+	switch r.Method {
+	case http.MethodGet:
+
+		slug := r.PathValue("slug")
+		switch slug {
+		case "":
+			h.getAllScopes(w, r, log)
+		case "active":
+			h.getActiveScopes(w, r, log)
+			return
+		default:
+			h.getScopeBySlug(w, r, log)
+			return
+		}
+	case http.MethodPut:
+		h.updateScope(w, r, log)
+		return
+	case http.MethodPost:
+
+		slug := r.PathValue("slug")
+		if slug != "add" {
+			log.Error("only posts to /add are allowed")
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusBadRequest,
+				Message:    "only posts to /add are allowed",
+			}
+			e.SendJsonErr(w)
+			return
+		}
+
+		h.createScope(w, r, log)
+		return
+	default:
+		log.Error(fmt.Sprintf("unsupported method %s for endpoint %s", r.Method, r.URL.Path))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "only GET http method allowed",
+			Message:    fmt.Sprintf("unsupported method %s for endpoint %s", r.Method, r.URL.Path),
 		}
 		e.SendJsonErr(w)
 		return
 	}
+}
+
+func (h *handler) getAllScopes(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
 	var allowedRead []string
@@ -88,60 +121,56 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
-	if _, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken)
+	if err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
 
 	// check if iamVerifier is nil, if not nil, validate user token
+	var authorized *jwt.Token
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
-		if _, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken); err != nil {
-			h.logger.Error(fmt.Sprintf("failed to validate user token: %v", err.Error()))
+		authorizedUser, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken)
+		if err != nil {
+			log.Error("failed to validate user token", "err", err.Error())
 			connect.RespondAuthFailure(connect.User, err, w)
 			return
 		}
+		authorized = authorizedUser
 	}
 
+	// get scopes from persistence layer
 	scopes, err := h.svc.GetScopes()
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get scopes: %v", err.Error()))
+		log.Error("failed to get scopes", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
-			Message:    "internal service error",
+			Message:    "failed to get scopes",
 		}
 		e.SendJsonErr(w)
 		return
 	}
 
-	scopesJson, err := json.Marshal(scopes)
-	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to marshal scopes to json payload: %v", err.Error()))
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusInternalServerError,
-			Message:    "internal service error",
-		}
-		e.SendJsonErr(w)
-		return
-	}
+	log.Info(fmt.Sprintf("successfully retrieved %d scopes", len(scopes)),
+		slog.String("requesting_service", authorizedSvc.Claims.Subject),
+		slog.String("actor", authorized.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(scopesJson)
-}
-
-// s2s handler: meant for provideing data to services, not users, no identity jwt validation
-func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
-
-	if r.Method != "GET" {
-		h.logger.Error("only GET http method allowed")
+	if err := json.NewEncoder(w).Encode(scopes); err != nil {
+		h.logger.Error("failed to encode scopes to json", "err", err.Error())
 		e := connect.ErrorHttp{
-			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "only GET http method allowed",
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to encode scopes to json",
 		}
 		e.SendJsonErr(w)
 		return
 	}
+}
+
+// getActiveScopes retrieves all active scopes from the database and returns them as a json response
+func (h *handler) getActiveScopes(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
 	var allowedRead []string
@@ -153,88 +182,82 @@ func (h *handler) HandleActiveScopes(w http.ResponseWriter, r *http.Request) {
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
-	if _, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken)
+	if err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
 
 	// check if iamVerifier is nil, if not nil, validate user token
+	var authorized *jwt.Token
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
-		if _, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken); err != nil {
-			h.logger.Error(fmt.Sprintf("failed to validate user token: %v", err.Error()))
+		authorizedUser, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken)
+		if err != nil {
+			log.Error("failed to validate user token", "err", err.Error())
 			connect.RespondAuthFailure(connect.User, err, w)
 			return
 		}
+		authorized = authorizedUser
 	}
 
+	// get active scopes from persistence layer
 	scopes, err := h.svc.GetActiveScopes()
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get active scopes from database: %v", err.Error()))
+		log.Error("failed to get active scopes", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
-			Message:    "internal service error: failed get scopes from database",
+			Message:    "failed get active scopes from database",
 		}
 		e.SendJsonErr(w)
 		return
 	}
 
-	scopesJson, err := json.Marshal(scopes)
-	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to marshal scopes to json payload: %v", err.Error()))
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusInternalServerError,
-			Message:    "internal service error",
-		}
-		e.SendJsonErr(w)
-		return
-	}
+	log.Info(fmt.Sprintf("successfully retrieved %d active scopes", len(scopes)),
+		slog.String("requesting_service", authorizedSvc.Claims.Subject),
+		slog.String("actor", authorized.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(scopesJson)
-
-}
-
-// HandleAdd handles requests to add a new scope
-// concrete impl for the HandleAdd method
-func (h *handler) HandleAdd(w http.ResponseWriter, r *http.Request) {
-
-	// validate http method
-	if r.Method != "POST" {
-		h.logger.Error("only POST http method allowed")
+	if err := json.NewEncoder(w).Encode(scopes); err != nil {
+		h.logger.Error("failed to encode active scopes to json", "err", err.Error())
 		e := connect.ErrorHttp{
-			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "only POST http method allowed",
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to encode active scopes to json",
 		}
 		e.SendJsonErr(w)
 		return
 	}
+}
+
+// createScope handles requests to add a new scope
+func (h *handler) createScope(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
-	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("/scopes/add handler failed to validate s2s token: %v", err.Error()))
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken)
+	if err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
 
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
-	if _, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, usrToken); err != nil {
-		h.logger.Error(fmt.Sprintf("/scopes/add handler failed to validate user token: %v", err.Error()))
+	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, usrToken)
+	if err != nil {
+		log.Error("failed to validate user token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
 
 	// get cmd from request body
 	var cmd types.Scope
-	err := json.NewDecoder(r.Body).Decode(&cmd)
-	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to decode scope from request body: %v", err.Error()))
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
-			Message:    "failed to decode scope from request body",
+			Message:    "failed to decode request body",
 		}
 		e.SendJsonErr(w)
 		return
@@ -242,10 +265,10 @@ func (h *handler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 
 	// validate scope
 	if err := cmd.ValidateCmd(); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate scope: %v", err.Error()))
+		log.Error("failed to validate scope", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnprocessableEntity,
-			Message:    fmt.Sprintf("failed to validate scope: %v", err.Error()),
+			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return
@@ -254,45 +277,23 @@ func (h *handler) HandleAdd(w http.ResponseWriter, r *http.Request) {
 	// add scope
 	scope, err := h.svc.AddScope(&cmd)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to add scope: %v", err.Error()))
+		log.Error("failed to add scope", "err", err.Error())
 		h.HandleServiceError(w, err)
 		return
 	}
+
+	log.Info(fmt.Sprintf("successfully added scope %s", scope.Name),
+		slog.String("requesting_service", authorizedSvc.Claims.Subject),
+		slog.String("actor", authorized.Claims.Subject))
 
 	// respond 201
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(scope); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to encode scope to json: %v", err.Error()))
+		log.Error("failed to encode created scope to json", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
-			Message:    "failed to encode scope to json",
-		}
-		e.SendJsonErr(w)
-		return
-	}
-}
-
-// HandleScope handles all requests for a single scope: GET, PUT, POST, DELETE
-// concrete impl for the HandleScope method
-func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
-
-	switch r.Method {
-	case http.MethodGet:
-		h.handleGet(w, r)
-		return
-	// case "PUT":
-	// 	return
-	case http.MethodPost:
-		h.handlePost(w, r)
-		return
-	// case "DELETE":
-	// 	return
-	default:
-		h.logger.Error("only GET, PUT, POST, DELETE http methods allowed")
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "only GET, PUT, POST, DELETE http methods allowed",
+			Message:    "failed to encode created scope to json",
 		}
 		e.SendJsonErr(w)
 		return
@@ -301,20 +302,22 @@ func (h *handler) HandleScope(w http.ResponseWriter, r *http.Request) {
 
 // handleGet handles GET requests for a single scope
 // concrete impl for the GET part of HandleScope method
-func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
+func (h *handler) getScopeBySlug(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
-	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedRead, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate s2s token: %v", err.Error()))
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedRead, svcToken)
+	if err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
 
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
-	if _, err := h.iamVerifier.BuildAuthorized(userAllowedRead, usrToken); err != nil {
-		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate user token: %v", err.Error()))
+	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedRead, usrToken)
+	if err != nil {
+		log.Error("failed to validate user token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
@@ -322,7 +325,7 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	// get the url slug from the request
 	slug, err := connect.GetValidSlug(r)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get valid slug from request: %s", err.Error()))
+		log.Error("failed to get valid slug from request", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "invalid service client slug",
@@ -331,18 +334,22 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// get scope
+	// get scope from persistence layer
 	scope, err := h.svc.GetScope(slug)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get scope %s: %v", slug, err.Error()))
+		log.Error(fmt.Sprintf("failed to get scope %s", slug), "err", err.Error())
 		h.HandleServiceError(w, err)
 		return
 	}
 
+	log.Info(fmt.Sprintf("successfully retrieved scope %s", scope.Name),
+		slog.String("requesting_service", authorizedSvc.Claims.Subject),
+		slog.String("actor", authorized.Claims.Subject))
+
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(scope)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to encode scope to json: %v", err.Error()))
+		log.Error("failed to encode scope to json", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "failed to encode scope to json",
@@ -354,12 +361,13 @@ func (h *handler) handleGet(w http.ResponseWriter, r *http.Request) {
 
 // handlePost handles PUT requests for a single scope
 // concrete impl for the PUT part of HandleScope method
-func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
+func (h *handler) updateScope(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
-	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate s2s token: %v", err.Error()))
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken)
+	if err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
@@ -368,7 +376,7 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	usrToken := r.Header.Get("Authorization")
 	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, usrToken)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("/scopes/{slug} handler failed to validate user token: %v", err.Error()))
+		log.Error("failed to validate user token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
@@ -376,7 +384,7 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	// get the url slug from the request
 	slug, err := connect.GetValidSlug(r)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get valid slug from request: %s", err.Error()))
+		log.Error("failed to get valid slug from request", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "invalid service client slug",
@@ -388,7 +396,7 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 	// get cmd from request body
 	var cmd types.Scope
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to decode scope from request body: %v", err.Error()))
+		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "failed to decode scope from request body",
@@ -399,69 +407,88 @@ func (h *handler) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// validate scope
 	if err := cmd.ValidateCmd(); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate scope: %v", err.Error()))
+		log.Error("failed to validate scope", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnprocessableEntity,
-			Message:    fmt.Sprintf("failed to validate scope: %v", err.Error()),
+			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return
 	}
 
-	// look up scope by slug --> and error if bad scope
-	scope, err := h.svc.GetScope(slug)
+	// look up record by slug --> and error if bad record
+	record, err := h.svc.GetScope(slug)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get scope %s for update: %v", slug, err.Error()))
+		log.Error(fmt.Sprintf("failed to get scope %s", slug), "err", err.Error())
 		h.HandleServiceError(w, err)
 		return
 	}
 
 	// prepare updated scope
 	updated := &types.Scope{
-		Uuid:        scope.Uuid, // not allowed to update uuid
+		Uuid:        record.Uuid, // not allowed to update uuid
 		ServiceName: cmd.ServiceName,
 		Scope:       cmd.Scope,
 		Name:        cmd.Name,
 		Description: cmd.Description,
-		CreatedAt:   scope.CreatedAt, // not allowed to update created_at
+		CreatedAt:   record.CreatedAt, // not allowed to update created_at
 		Active:      cmd.Active,
-		Slug:        scope.Slug, // not allowed to update slug
+		Slug:        record.Slug, // not allowed to update slug
 	}
 
-	// update scope
+	// update scope in persistence layer
 	err = h.svc.UpdateScope(updated)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to update scope %s: %v", slug, err.Error()))
+		log.Error(fmt.Sprintf("failed to update scope %s", slug), "err", err.Error())
 		h.HandleServiceError(w, err)
 		return
 	}
 
 	// log updates
-	if cmd.ServiceName != scope.ServiceName {
-		h.logger.Info(fmt.Sprintf("service name updated from '%s' to '%s' by %s", scope.ServiceName, cmd.ServiceName, authorized.Claims.Subject))
+	var updatedFields []any
+
+	if updated.ServiceName != record.ServiceName {
+		updatedFields = append(updatedFields,
+			slog.String("scope_service_name_previous", record.ServiceName),
+			slog.String("scope_service_name_updated", updated.ServiceName))
 	}
 
-	if cmd.Scope != scope.Scope {
-		h.logger.Info(fmt.Sprintf("scope updated from '%s' to '%s' by %s", scope.Scope, cmd.Scope, authorized.Claims.Subject))
+	if updated.Scope != record.Scope {
+		updatedFields = append(updatedFields,
+			slog.String("scope_previous", record.Scope),
+			slog.String("scope_updated", updated.Scope))
 	}
 
-	if cmd.Name != scope.Name {
-		h.logger.Info(fmt.Sprintf("name updated from '%s' to '%s' by %s", scope.Name, cmd.Name, authorized.Claims.Subject))
+	if updated.Name != record.Name {
+		updatedFields = append(updatedFields,
+			slog.String("scope_name_previous", record.Name),
+			slog.String("scope_name_updated", updated.Name))
 	}
 
-	if cmd.Description != scope.Description {
-		h.logger.Info(fmt.Sprintf("description updated from '%s' to '%s' by %s", scope.Description, cmd.Description, authorized.Claims.Subject))
+	if updated.Description != record.Description {
+		updatedFields = append(updatedFields,
+			slog.String("scope_description_previous", record.Description),
+			slog.String("scope_description_updated", updated.Description))
 	}
 
-	if cmd.Active != scope.Active {
-		h.logger.Info(fmt.Sprintf("active updated from %t to %t by %s", scope.Active, cmd.Active, authorized.Claims.Subject))
+	if updated.Active != record.Active {
+		updatedFields = append(updatedFields,
+			slog.Bool("scope_active_previous", record.Active),
+			slog.Bool("scope_active_updated", updated.Active))
+	}
+
+	if len(updatedFields) > 0 {
+		log = log.With(updatedFields...)
+		log.Info(fmt.Sprintf("successfully updated scope - slug %s", record.Slug),
+			slog.String("requesting_service", authorizedSvc.Claims.Subject),
+			slog.String("actor", authorized.Claims.Subject))
 	}
 
 	// respond with updated scope
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(updated); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to encode updated scope to json: %v", err.Error()))
+		log.Error("failed to encode updated scope to json", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "failed to encode updated scope to json",

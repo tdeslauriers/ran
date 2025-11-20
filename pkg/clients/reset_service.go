@@ -25,7 +25,6 @@ func NewResetService(sql data.SqlRepository, creds authentication.CredService) R
 		creds: creds,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceS2s)).
 			With(slog.String(util.PackageKey, util.PackageClients)).
 			With(slog.String(util.ComponentKey, util.ComponentReset)),
 	}
@@ -47,7 +46,6 @@ func (s *resetService) ResetPassword(cmd profile.ResetCmd) error {
 	// validate cmd
 	// redundant validation, but good practice
 	if err := cmd.ValidateCmd(); err != nil {
-		s.logger.Error("failed to validate service client password refresh request", "err", err.Error())
 		return err
 	}
 
@@ -76,8 +74,7 @@ func (s *resetService) ResetPassword(cmd profile.ResetCmd) error {
 	// hash new password
 	newHash, err := s.creds.GenerateHashFromPassword(cmd.NewPassword)
 	if err != nil {
-		s.logger.Error(fmt.Sprintf("failed to hash new password for service client %s: %v", cmd.ResourceId, err))
-		return fmt.Errorf("failed to hash new password")
+		return fmt.Errorf("failed to hash new password for service client %s: %v", cmd.ResourceId, err)
 	}
 
 	// update password in client table

@@ -181,21 +181,16 @@ func (s *s2s) Run() error {
 	// scopes endpoint for services (not user facing)
 	// requires s2s service-call-specific scopes
 	s2sScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, nil) // user jwt verifier not needed
-	mux.HandleFunc("/s2s/scopes", s2sScopesHandler.HandleScopes)
-	mux.HandleFunc("/s2s/scopes/active", s2sScopesHandler.HandleActiveScopes)
+	mux.HandleFunc("/s2s/scopes/{slug...}", s2sScopesHandler.HandleScopes)
 
 	// scopes endpoint for users, ie, admin
 	iamScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, s.iamVerifier)
-	mux.HandleFunc("/scopes", iamScopesHandler.HandleScopes)
-	mux.HandleFunc("/scopes/active", iamScopesHandler.HandleActiveScopes)
-	mux.HandleFunc("/scopes/add", iamScopesHandler.HandleAdd)
-	mux.HandleFunc("/scopes/", iamScopesHandler.HandleScope)
+	mux.HandleFunc("/scopes/{slug...}", iamScopesHandler.HandleScopes)
 
 	clientHanlder := clients.NewHandler(s.clientsService, s.scopesService, s.s2sVerifier, s.iamVerifier)
-	mux.HandleFunc("/clients", clientHanlder.HandleClients)
+	mux.HandleFunc("/clients/{slug...}", clientHanlder.HandleClients)
 	mux.HandleFunc("/clients/register", clientHanlder.HandleRegistration)
 	mux.HandleFunc("/clients/reset", clientHanlder.HandleReset)
-	mux.HandleFunc("/clients/", clientHanlder.HandleClient)
 	mux.HandleFunc("/clients/scopes", clientHanlder.HandleScopes)
 
 	// pat token endpoints

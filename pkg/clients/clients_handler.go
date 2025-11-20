@@ -15,14 +15,11 @@ import (
 // ClientHandler provides http handlers for client (model) requests
 type ClientHandler interface {
 
-	// HandleClients returns all clients
+	// HandleClients handles all requests for clients: GET, POST, PUT, DELETE
 	HandleClients(w http.ResponseWriter, r *http.Request)
-
-	// HandleClient handles all requests for a single client: GET, POST, PUT, DELETE
-	HandleClient(w http.ResponseWriter, r *http.Request)
 }
 
-// NewClientHandler creates a new client handler
+// NewClientHandler creates a new ClientHandler interface, returning a pointer to a concrete implementation
 func NewClientHandler(s Service, s2s, iam jwt.Verifier) ClientHandler {
 	return &clientHandler{
 		service:     s,
@@ -30,7 +27,6 @@ func NewClientHandler(s Service, s2s, iam jwt.Verifier) ClientHandler {
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceS2s)).
 			With(slog.String(util.PackageKey, util.PackageClients)).
 			With(slog.String(util.ComponentKey, util.ComponentClients)),
 	}
@@ -38,6 +34,7 @@ func NewClientHandler(s Service, s2s, iam jwt.Verifier) ClientHandler {
 
 var _ ClientHandler = (*clientHandler)(nil)
 
+// clientHandler is a concrete implementation of the ClientHandler interface
 type clientHandler struct {
 	service     Service
 	s2sVerifier jwt.Verifier
@@ -46,14 +43,42 @@ type clientHandler struct {
 	logger *slog.Logger
 }
 
-// HandleClients returns all clients
+// HandleClients implements handling all requests for a single client: GET, POST, PUT, DELETE,
 // concrete impl of the Handler interface method
 func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed on /clients endpoint", http.StatusMethodNotAllowed)
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
+
+	switch r.Method {
+	case http.MethodGet:
+
+		// get slug if exists
+		slug := r.PathValue("slug")
+		if slug != "" {
+			h.getAllClients(w, r, log)
+			return
+		} else {
+			h.getClientBySlug(w, r, log)
+			return
+		}
+	case http.MethodPut:
+		h.updateClient(w, r, log)
+		return
+	default:
+		log.Error(fmt.Sprintf("unsupported method %s for endpoint %s", r.Method, r.URL.Path))
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    fmt.Sprintf("unsupported method %s for endpoint %s", r.Method, r.URL.Path),
+		}
+		e.SendJsonErr(w)
 		return
 	}
+}
+
+// getAllClients handles GET requests for all clients
+func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
 	var allowedRead []string
@@ -65,89 +90,71 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 
 	// validate service token
 	svcToken := r.Header.Get("Service-Authorization")
-	if _, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to validate s2s token: %v", err.Error()))
+	authorizedService, err := h.s2sVerifier.BuildAuthorized(allowedRead, svcToken)
+	if err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
 
 	// check if iamVerifier is nil, if not nil, validate user token
+	var authorizedUser *jwt.Token
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
-		if _, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken); err != nil {
-			h.logger.Error(fmt.Sprintf("failed to validate user token: %v", err.Error()))
+		authorized, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken)
+		if err != nil {
+			log.Error("failed to validate user access token", "err", err.Error())
 			connect.RespondAuthFailure(connect.User, err, w)
 			return
 		}
+		authorizedUser = authorized
 	}
 
 	clients, err := h.service.GetClients()
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get clients: %v", err.Error()))
+		log.Error("failed to get clients", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
-			Message:    "internal service error",
+			Message:    "failed to get clients",
 		}
 		e.SendJsonErr(w)
 		return
 	}
 
-	clientsJson, err := json.Marshal(clients)
-	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to marshal clients: %v", err.Error()))
-		e := connect.ErrorHttp{
-			StatusCode: http.StatusInternalServerError,
-			Message:    "internal service error",
-		}
-		e.SendJsonErr(w)
-		return
-	}
+	log.Info(fmt.Sprintf("successfully retrieved %d clients", len(clients)),
+		slog.String("requesting_service", authorizedService.Claims.Subject),
+		slog.String("actor", authorizedUser.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(clientsJson)
-
-}
-
-// HandleClient handles all requests for a single client: GET, POST, PUT, DELETE
-// concrete impl of the Handler interface method
-func (h *clientHandler) HandleClient(w http.ResponseWriter, r *http.Request) {
-
-	switch r.Method {
-	case http.MethodGet:
-		h.handleGet(w, r)
-		return
-	case http.MethodPost:
-		h.handlePost(w, r)
-		return
-	// case http.MethodPut:
-	// case http.MethodDelete:
-	default:
-		h.logger.Error(fmt.Sprintf("method not allowed on /clients/slug endpoint: %s", r.Method))
+	if err := json.NewEncoder(w).Encode(clients); err != nil {
+		log.Error("failed to encode clients to json", "err", err.Error())
 		e := connect.ErrorHttp{
-			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "method not allowed",
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to encode clients to json",
 		}
 		e.SendJsonErr(w)
 		return
 	}
 }
 
-// handleGet handles GET requests for a single client by slug
-func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
+// getClientBySlug handles GET requests for a single client by slug
+func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 
 	// validate s2s token
-	svcToken := r.Header.Get("Service-Authorization")
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
-	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedRead, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("/clients/{slug} handler failed to validate s2s token: %v", err.Error()))
+	svcToken := r.Header.Get("Service-Authorization")
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedRead, svcToken)
+	if err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
 
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
-	if _, err := h.iamVerifier.BuildAuthorized(userAllowedRead, usrToken); err != nil {
-		h.logger.Error(fmt.Sprintf("/clients/{slug} handler failed to validate user token: %v", err.Error()))
+	authorizedUser, err := h.iamVerifier.BuildAuthorized(userAllowedRead, usrToken)
+	if err != nil {
+		log.Error("failed to validate user access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
@@ -155,7 +162,7 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 	// get the url slug from the request
 	slug, err := connect.GetValidSlug(r)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get valid slug from request: %s", err.Error()))
+		log.Error("invalid service client slug", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "invalid service client slug",
@@ -164,19 +171,24 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// get client by slug from persistence layer
 	client, err := h.service.GetClient(slug)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get client: %v", err.Error()))
+		log.Error(fmt.Sprintf("failed to get client - slug %s", slug), "err", err.Error())
 		h.service.HandleServiceError(w, err)
 		return
 	}
 
+	log.Info(fmt.Sprintf("successfully retrieved client %s - slug %s", client.Name, slug),
+		slog.String("requesting_service", authorizedSvc.Claims.Subject),
+		slog.String("actor", authorizedUser.Claims.Subject))
+
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(client); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to encode service client to json: %v", err.Error()))
+		log.Error(fmt.Sprintf("failed to encode client %s - slug %s to json", client.Name, client.Slug), "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
-			Message:    "failed to encode service client to json",
+			Message:    fmt.Sprintf("failed to encode client %s - slug %s to json", client.Name, client.Slug),
 		}
 		e.SendJsonErr(w)
 		return
@@ -184,22 +196,23 @@ func (h *clientHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePost handles POST requests for a single client
-func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
+func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
 
 	// validate s2s token
-	svcToken := r.Header.Get("Service-Authorization")
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
-	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
-		h.logger.Error(fmt.Sprintf("post /client/{slug} handler failed to validate s2s token: %v", err.Error()))
+	svcToken := r.Header.Get("Service-Authorization")
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken)
+	if err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
 
 	// validate user access token
 	userToken := r.Header.Get("Authorization")
-	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, userToken)
+	authorizedUser, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, userToken)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("post /client/{slug} handler failed to validate user token: %v", err.Error()))
+		log.Error("failed to validate user access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
@@ -207,7 +220,7 @@ func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	// get the url slug from the request
 	slug, err := connect.GetValidSlug(r)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get valid slug from request: %s", err.Error()))
+		log.Error("invalid service client slug", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "invalid service client slug",
@@ -219,7 +232,7 @@ func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	// get cmd from request body
 	var cmd profile.Client
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to decode request body: %v", err.Error()))
+		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
 			Message:    "failed to decode request body",
@@ -230,69 +243,92 @@ func (h *clientHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// validate client
 	if err := cmd.ValidateCmd(); err != nil {
-		h.logger.Error(fmt.Sprintf("invalid client: %v", err.Error()))
+		log.Error("failed to validate client update cmd", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnprocessableEntity,
-			Message:    "invalid client",
+			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return
 	}
 
-	// look up client in db
-	client, err := h.service.GetClient(slug)
+	// look up record in db
+	record, err := h.service.GetClient(slug)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to get client: %v", err.Error()))
+		log.Error(fmt.Sprintf("failed to get client - slug %s", slug), "err", err.Error())
 		h.service.HandleServiceError(w, err)
 		return
 	}
 
 	// prepare updated client
 	updated := &Client{
-		Id:             client.Id, // not allowed to update id
+		Id:             record.Id, // not allowed to update id
 		Name:           cmd.Name,
 		Owner:          cmd.Owner,
-		CreatedAt:      client.CreatedAt, // not allowed to update created_at
+		CreatedAt:      record.CreatedAt, // not allowed to update created_at
 		Enabled:        cmd.Enabled,
 		AccountExpired: cmd.AccountExpired,
 		AccountLocked:  cmd.AccountLocked,
-		Slug:           client.Slug, // not allowed to update slug
+		Slug:           record.Slug, // not allowed to update slug
 	}
 
 	// update client
 	err = h.service.UpdateClient(updated)
 	if err != nil {
-		h.logger.Error(fmt.Sprintf("failed to update client: %v", err.Error()))
+		log.Error(fmt.Sprintf("failed to update client %s - slug %s", updated.Name, updated.Slug), "err", err.Error())
 		h.service.HandleServiceError(w, err)
 		return
 	}
 
-	// log updates
-	if cmd.Name != client.Name {
-		h.logger.Info(fmt.Sprintf("sesrvice client name updated from %s to %s by %s", client.Name, cmd.Name, authorized.Claims.Subject))
+	// log updated fields if any
+	var updatedFields []any
+
+	if updated.Name != record.Name {
+		updatedFields = append(updatedFields,
+			slog.String("client_name_previous", record.Name),
+			slog.String("client_name_updated", updated.Name))
 	}
 
-	if cmd.Owner != client.Owner {
-		h.logger.Info(fmt.Sprintf("sesrvice client owner updated from %s to %s by %s", client.Owner, cmd.Owner, authorized.Claims.Subject))
+	if updated.Owner != record.Owner {
+		updatedFields = append(updatedFields,
+			slog.String("client_owner_previous", record.Owner),
+			slog.String("client_owner_updated", updated.Owner))
 	}
 
-	if cmd.Enabled != client.Enabled {
-		h.logger.Info(fmt.Sprintf("sesrvice client enabled updated from %t to %t by %s", client.Enabled, cmd.Enabled, authorized.Claims.Subject))
+	if updated.Enabled != record.Enabled {
+		updatedFields = append(updatedFields,
+			slog.Bool("client_enabled_previous", record.Enabled),
+			slog.Bool("client_enabled_updated", updated.Enabled))
 	}
 
-	if cmd.AccountExpired != client.AccountExpired {
-		h.logger.Info(fmt.Sprintf("sesrvice client account_expired updated from %t to %t by %s", client.AccountExpired, cmd.AccountExpired, authorized.Claims.Subject))
+	if updated.AccountExpired != record.AccountExpired {
+		updatedFields = append(updatedFields,
+			slog.Bool("client_account_expired_previous", record.AccountExpired),
+			slog.Bool("client_account_expired_updated", updated.AccountExpired))
 	}
 
-	if cmd.AccountLocked != client.AccountLocked {
-		h.logger.Info(fmt.Sprintf("sesrvice client account_locked updated from %t to %t by %s", client.AccountLocked, cmd.AccountLocked, authorized.Claims.Subject))
+	if updated.AccountLocked != record.AccountLocked {
+		updatedFields = append(updatedFields,
+			slog.Bool("client_account_locked_previous", record.AccountLocked),
+			slog.Bool("client_account_locked_updated", updated.AccountLocked))
+	}
+
+	if len(updatedFields) > 0 {
+		log = log.With(updatedFields...)
+		log.Info(fmt.Sprintf("successfully updated client %s - slug %s", updated.Name, updated.Slug),
+			slog.String("requesting_service", authorizedSvc.Claims.Subject),
+			slog.String("actor", authorizedUser.Claims.Subject))
+	} else {
+		log.Warn(fmt.Sprintf("updated executed, but no fields changed for client %s - slug %s", updated.Name, updated.Slug),
+			slog.String("requesting_service", authorizedSvc.Claims.Subject),
+			slog.String("actor", authorizedUser.Claims.Subject))
 	}
 
 	// respond with updated client
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(updated); err != nil {
-		h.logger.Error(fmt.Sprintf("failed to encode updated sesrvice client to json: %v", err.Error()))
+		log.Error(fmt.Sprintf("failed to encode updated client %s - slug %s to json", updated.Name, updated.Slug), "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "failed to encode updated client to json",
