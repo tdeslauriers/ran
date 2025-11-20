@@ -1,13 +1,16 @@
 package clients
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/profile"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
@@ -27,7 +30,7 @@ type ClientService interface {
 	// UpdateClient updates a service client record (doesn not include password updates/resets)
 	UpdateClient(client *Client) error
 
-	UpdateScopes(client *profile.Client, updated []types.Scope) error
+	UpdateScopes(ctx context.Context, client *profile.Client, updated []types.Scope) error
 }
 
 // NewClientService creates a new clients service interface abstracting a concrete implementation
@@ -36,7 +39,6 @@ func NewClientService(sql data.SqlRepository) ClientService {
 		sql: sql,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceKey)).
 			With(slog.String(util.PackageKey, util.PackageClients)).
 			With(slog.String(util.ComponentKey, util.ComponentClients)),
 	}
@@ -177,25 +179,34 @@ func (s *clientService) UpdateClient(client *Client) error {
 					account_locked = ?
 			WHERE slug = ?`
 	if err := s.sql.UpdateRecord(query, client.Name, client.Owner, client.Enabled, client.AccountExpired, client.AccountLocked, client.Slug); err != nil {
-		errMsg := fmt.Sprintf("failed to update service client record for slug %s: %v", client.Slug, err)
-		s.logger.Error(errMsg)
-		return fmt.Errorf(errMsg)
+		return err
 	}
 
 	return nil
 }
 
 // UpdateScopes is a concrete impl of the Service interface method: updates a service client's assigned scopes
-func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Scope) error {
+func (s *clientService) UpdateScopes(ctx context.Context, client *profile.Client, updated []types.Scope) error {
+
+	// create local logger
+	log := s.logger
+
+	// get telemetry from context
+	tel, ok := ctx.Value(connect.TelemetryKey).(*connect.Telemetry)
+	if ok && tel != nil {
+		log = log.With(tel.TelemetryFields()...)
+	} else {
+		log.Warn("telemetry not found in context: using default logger")
+	}
 
 	// validate client is not nil
 	if client == nil {
-		return fmt.Errorf(ErrClientMissing)
+		return errors.New(ErrClientMissing)
 	}
 
 	// if client scopes and updated scopes are both empty, return
 	if len(client.Scopes) < 1 && len(updated) < 1 {
-		s.logger.Info("both client scopes and updated scopes are empty: no scopes to update")
+		log.Warn("both client scopes and updated scopes are empty: no scopes to update")
 		return nil
 	}
 
@@ -264,7 +275,7 @@ func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Sco
 							errChan <- fmt.Errorf("%s for scope %s from client %s: %v", ErrRemoveXref, scope.Name, client.Name, err)
 						}
 
-						s.logger.Info(fmt.Sprintf("successfully removed xref record for scope %s from client %s", scope.Name, client.Name))
+						log.Info(fmt.Sprintf("successfully removed xref record for scope %s from client %s", scope.Name, client.Name))
 					}(scope)
 				}
 			}
@@ -293,7 +304,7 @@ func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Sco
 							errChan <- fmt.Errorf("%s for scope %s to client %s: %v", ErrAddXref, scope.Name, client.Name, err)
 						}
 
-						s.logger.Info(fmt.Sprintf("successfully added xref record for scope %s to client %s", scope.Name, client.Name))
+						log.Info(fmt.Sprintf("successfully added xref record for scope %s to client %s", scope.Name, client.Name))
 					}(scope)
 				}
 			}
@@ -316,7 +327,7 @@ func (s *clientService) UpdateScopes(client *profile.Client, updated []types.Sco
 						counter++
 					}
 				}
-				return fmt.Errorf(sb.String())
+				return errors.New(sb.String())
 			}
 		}
 	}

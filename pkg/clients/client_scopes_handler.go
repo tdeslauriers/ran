@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -29,7 +30,6 @@ func NewScopesHandler(s Service, scope scopes.Service, s2s, iam jwt.Verifier) Sc
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceS2s)).
 			With(slog.String(util.PackageKey, util.PackageClients)).
 			With(slog.String(util.ComponentKey, util.ComponentClients)),
 	}
@@ -50,11 +50,18 @@ type scopesHandler struct {
 // HandleScopes is a concrete impl of the ScopesHanlder interface method: handles a the request to update a clients assigned scopes
 func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
+
+	// add telemetry to context for downstream calls + service functions
+	ctx := context.WithValue(r.Context(), connect.TelemetryKey, tel)
+
 	if r.Method != http.MethodPost {
-		h.logger.Error("invalid http method: only POST is allowed")
+		log.Error("invalid request method", "err", "only POST method is allowed")
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
-			Message:    "invalid http method: only POST is allowed",
+			Message:    "only POST is allowed",
 		}
 		e.SendJsonErr(w)
 		return
@@ -63,7 +70,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	// validate s2stoken
 	svcToken := r.Header.Get("Service-Authorization")
 	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
-		h.logger.Error("password reset handler failed to authorize service token", "err", err.Error())
+		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
 	}
@@ -72,7 +79,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	accessToken := r.Header.Get("Authorization")
 	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, accessToken)
 	if err != nil {
-		h.logger.Error("password reset handler failed to authorize iam token", "err", err.Error())
+		log.Error("failed to validate user access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
 		return
 	}
@@ -80,11 +87,10 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	// decode request body
 	var cmd ClientScopesCmd
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-		errMsg := fmt.Sprintf("failed to decode request body: %v", err)
-		h.logger.Error(errMsg)
+		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
-			Message:    errMsg,
+			Message:    "failed to decode request body",
 		}
 		e.SendJsonErr(w)
 		return
@@ -92,11 +98,10 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// validate cmd
 	if err := cmd.ValidateCmd(); err != nil {
-		errMsg := fmt.Sprintf("invalid /client/scopes request: %v", err)
-		h.logger.Error(errMsg)
+		log.Error("failed to validate request body", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
-			Message:    errMsg,
+			Message:    err.Error(),
 		}
 		e.SendJsonErr(w)
 		return
@@ -119,8 +124,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	// Note: chose to pull back all scopes and loop thru, rather than call the db for each slug
 	allScopes, err := h.scopesSvc.GetScopes()
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to retrieve scopes records: %v", err)
-		h.logger.Error(errMsg)
+		log.Error("failed to retrieve scopes from persistence", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
 			Message:    "interal server error",
@@ -144,11 +148,10 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 			}
 			// all slugs must be existing scope slugs or the request is invalid
 			if !exists {
-				errMsg := fmt.Sprintf("scope slug not found: %s", slug)
-				h.logger.Error(errMsg)
+				log.Error(fmt.Sprintf("scope slug %s not found", slug))
 				e := connect.ErrorHttp{
 					StatusCode: http.StatusNotFound,
-					Message:    errMsg,
+					Message:    fmt.Sprintf("scope slug %s not found", slug),
 				}
 				e.SendJsonErr(w)
 				return
@@ -158,15 +161,15 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// update client record
 	// Note: empty scopes slice indicates all scopes were removed --> valid request --> update client record
-	if err := h.clientSvc.UpdateScopes(client, updated); err != nil {
-		errMsg := fmt.Sprintf("failed to update client %s's assigned scopes: %v", client.Name, err)
-		h.logger.Error(errMsg)
+	if err := h.clientSvc.UpdateScopes(ctx, client, updated); err != nil {
+		log.Error(fmt.Sprintf("failed to update client slug %s's scopes", client.Id), "err", err.Error())
 		h.clientSvc.HandleServiceError(w, err)
 		return
 	}
 
 	// log success
-	h.logger.Info(fmt.Sprintf("service client %s's assigned scopes were updated successfully by %s", client.Name, authorized.Claims.Subject))
+	h.logger.Info(fmt.Sprintf("service client %s's assigned scopes were updated successfully", client.Name),
+		slog.String("actor", authorized.Claims.Subject))
 
 	// respond 204
 	w.WriteHeader(http.StatusNoContent)

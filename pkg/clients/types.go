@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
@@ -141,7 +142,7 @@ func (r *RegisterCmd) ValidateCmd() error {
 
 	// validate confirm password
 	if r.Password != r.ConfirmPassword {
-		return fmt.Errorf(ErrInvalidPwMismatch)
+		return errors.New(ErrInvalidPwMismatch)
 	}
 
 	// CreatedAt is a timestamp created programmatically, no validation needed

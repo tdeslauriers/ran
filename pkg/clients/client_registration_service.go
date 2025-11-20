@@ -25,7 +25,6 @@ func NewRegistrationService(sql data.SqlRepository, creds authentication.CredSer
 		creds: creds,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceKey)).
 			With(slog.String(util.PackageKey, util.PackageClients)).
 			With(slog.String(util.ComponentKey, util.ComponentRegister)),
 	}

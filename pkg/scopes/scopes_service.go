@@ -107,9 +107,7 @@ func (s *service) GetScope(slug string) (*types.Scope, error) {
 
 	// validate slug is well formed uuid
 	if !validate.IsValidUuid(slug) {
-		errMsg := fmt.Sprintf("%s: '%s' not well-formed uuid", ErrInvalidSlug, slug)
-		s.logger.Error(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, errors.New(ErrInvalidSlug)
 	}
 
 	// get scope record from db
@@ -144,33 +142,25 @@ func (s *service) AddScope(scope *types.Scope) (*types.Scope, error) {
 
 	// validate scope is not nil and is well formed
 	if scope == nil {
-		errMsg := "scope is nil"
-		s.logger.Error(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, errors.New("scope is nil")
 	}
 
 	// redundant check (should be checked in handler), but good pratice
 	if err := scope.ValidateCmd(); err != nil {
-		errMsg := fmt.Sprintf("invalid scope: %v", err)
-		s.logger.Error(errMsg)
-		return nil, fmt.Errorf(errMsg)
+		return nil, err
 	}
 
 	// generate uuid for scope
 	id, err := uuid.NewRandom()
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to generate uuid for scope: %v", err)
-		s.logger.Error(errMsg)
-		return nil, errors.New(errMsg)
+		return nil, fmt.Errorf("failed to generate uuid for scope id: %v", err)
 	}
 	scope.Uuid = id.String()
 
 	// generate slug for scope
 	slug, err := uuid.NewRandom()
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to generate slug for scope: %v", err)
-		s.logger.Error(errMsg)
-		return nil, errors.New(errMsg)
+		return nil, fmt.Errorf("failed to generate slug for scope: %v", err)
 	}
 	scope.Slug = slug.String()
 
@@ -192,9 +182,7 @@ func (s *service) AddScope(scope *types.Scope) (*types.Scope, error) {
 				) 
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 	if err := s.sql.InsertRecord(query, *scope); err != nil {
-		errMsg := fmt.Sprintf("failed to insert scope record: %v", err)
-		s.logger.Error(errMsg)
-		return nil, errors.New(errMsg)
+		return nil, fmt.Errorf("failed to insert new scope record into db: %v", err)
 	}
 
 	return scope, nil
@@ -205,16 +193,12 @@ func (s *service) UpdateScope(scope *types.Scope) error {
 
 	// vadiate scope is not nil and is well formed
 	if scope == nil {
-		errMsg := "scope is nil"
-		s.logger.Error(errMsg)
-		return fmt.Errorf(errMsg)
+		return errors.New("scope is nil")
 	}
 
 	// redundant check, but good pratice
 	if err := scope.ValidateCmd(); err != nil {
-		errMsg := fmt.Sprintf("invalid scope: %v", err)
-		s.logger.Error(errMsg)
-		return fmt.Errorf(errMsg)
+		return err
 	}
 
 	// update scope record in db
@@ -228,9 +212,7 @@ func (s *service) UpdateScope(scope *types.Scope) error {
 					active = ?
 			WHERE slug = ?`
 	if err := s.sql.UpdateRecord(query, scope.ServiceName, scope.Scope, scope.Name, scope.Description, scope.Active, scope.Slug); err != nil {
-		errMsg := fmt.Sprintf("failed to update scope record for slug %s: %v", scope.Slug, err)
-		s.logger.Error(errMsg)
-		return errors.New(errMsg)
+		return err
 	}
 
 	return nil

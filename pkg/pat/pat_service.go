@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
-	"github.com/tdeslauriers/carapace/pkg/pat"
+
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/carapace/pkg/validate"
 	"github.com/tdeslauriers/ran/internal/util"
@@ -26,7 +26,7 @@ type Service interface {
 	// IntrospectPat validates and introspects a given personal access token (PAT), and will
 	// return the associated pat scopes if it it is valid, active, not revoked, and not expired.
 	// Will return an error if the token is invalid, inactive, revoked, or expired.
-	IntrospectPat(token string) (*pat.IntrospectResponse, error)
+	IntrospectPat(token string) (*exo.IntrospectResponse, error)
 }
 
 // NewService creates a new personal access token (PAT) service interface abstracting a concrete implementation
@@ -100,6 +100,9 @@ func (s *service) GeneratePat(slug string) (*Pat, error) {
 
 	// create lookup index from the raw token to persist in the db
 	index, err := s.pat.ObtainIndex(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to obtain pat index from raw token: %v", err)
+	}
 
 	// persist the pat record
 	record := PatRecord{
@@ -198,7 +201,7 @@ func (s *service) handleClientLookupErr(clientSlug string) error {
 // IntrospectPat validates and introspects a given personal access token (PAT), and will
 // return the associated pat scopes if it it is valid, active, not revoked, and not expired.
 // Will return an error if the token is invalid, inactive, revoked, or expired.
-func (s *service) IntrospectPat(token string) (*pat.IntrospectResponse, error) {
+func (s *service) IntrospectPat(token string) (*exo.IntrospectResponse, error) {
 
 	// validate the token format
 	// redundant validation, but good practice
@@ -267,7 +270,7 @@ func (s *service) IntrospectPat(token string) (*pat.IntrospectResponse, error) {
 	}
 
 	// return the introspect response with the scopes
-	return &pat.IntrospectResponse{
+	return &exo.IntrospectResponse{
 		Active:      true,
 		Scope:       sb.String(),
 		Sub:         scopes[0].ClientId,
@@ -279,7 +282,7 @@ func (s *service) IntrospectPat(token string) (*pat.IntrospectResponse, error) {
 // buildPatFailResponse is a helper method to build the appropriate pat.IntrospectResponse
 // and error message if the pat token introspection fails due to the pat being inactive,
 // revoked, expired, or if the associated client is disabled, locked, or expired.
-func (s *service) buildPatFailResponse(patIndex string) (*pat.IntrospectResponse, error) {
+func (s *service) buildPatFailResponse(patIndex string) (*exo.IntrospectResponse, error) {
 
 	// Client status checks
 	// check if the client is disabled, locked, or expired
@@ -288,7 +291,7 @@ func (s *service) buildPatFailResponse(patIndex string) (*pat.IntrospectResponse
 		return nil, fmt.Errorf("failed to retrieve client record for pat token: %v", err)
 	}
 	if disabled {
-		return &pat.IntrospectResponse{
+		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("client associated with this pat token is disabled")
 	}
@@ -299,7 +302,7 @@ func (s *service) buildPatFailResponse(patIndex string) (*pat.IntrospectResponse
 		return nil, fmt.Errorf("failed to retrieve client record for pat token: %v", err)
 	}
 	if locked {
-		return &pat.IntrospectResponse{
+		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("client associated with this pat token is locked")
 	}
@@ -310,7 +313,7 @@ func (s *service) buildPatFailResponse(patIndex string) (*pat.IntrospectResponse
 		return nil, fmt.Errorf("failed to retrieve client record for pat token: %v", err)
 	}
 	if clientExpired {
-		return &pat.IntrospectResponse{
+		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("client associated with this pat token has expired")
 	}
@@ -321,7 +324,7 @@ func (s *service) buildPatFailResponse(patIndex string) (*pat.IntrospectResponse
 		return nil, fmt.Errorf("failed to retrieve pat record for token: %v", err)
 	}
 	if inactive {
-		return &pat.IntrospectResponse{
+		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("pat token is inactive")
 	}
@@ -333,7 +336,7 @@ func (s *service) buildPatFailResponse(patIndex string) (*pat.IntrospectResponse
 		return nil, fmt.Errorf("failed to retrieve pat record for token: %v", err)
 	}
 	if revoked {
-		return &pat.IntrospectResponse{
+		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("pat token has been revoked")
 	}
@@ -344,7 +347,7 @@ func (s *service) buildPatFailResponse(patIndex string) (*pat.IntrospectResponse
 		return nil, fmt.Errorf("failed to retrieve pat record for token: %v", err)
 	}
 	if patExpired {
-		return &pat.IntrospectResponse{
+		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("pat token has expired")
 	}
@@ -355,12 +358,12 @@ func (s *service) buildPatFailResponse(patIndex string) (*pat.IntrospectResponse
 		return nil, fmt.Errorf("failed to retrieve pat record for token: %v", err)
 	}
 	if !found {
-		return &pat.IntrospectResponse{
+		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("pat token not found")
 	}
 
-	return &pat.IntrospectResponse{
+	return &exo.IntrospectResponse{
 		Active: false,
 	}, fmt.Errorf("no active scopes found for this pat token")
 }

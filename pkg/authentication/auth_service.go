@@ -1,6 +1,7 @@
 package authentication
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
@@ -21,6 +23,8 @@ const (
 	RefreshDuration time.Duration = time.Duration(180) // minutes
 )
 
+// NewS2sAuthService creates a new S2sAuthService interface instance returning
+// a pointer to the underlying concrete implementation.
 func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, i data.Indexer, ciph data.Cryptor, creds CredService) types.S2sAuthService {
 	return &s2sAuthService{
 		sql:         sql,
@@ -29,12 +33,15 @@ func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, i data.Indexer, 
 		cryptor:     ciph,
 		credService: creds,
 
-		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentAuthn)),
+		logger: slog.Default().
+			With(slog.String(util.ComponentKey, util.ComponentAuthn)).
+			With(util.PackageKey, util.PackageAuthentication),
 	}
 }
 
 var _ types.S2sAuthService = (*s2sAuthService)(nil)
 
+// s2sAuthService implements the S2sAuthService interface for service-to-service authentication.
 type s2sAuthService struct {
 	sql         data.SqlRepository
 	mint        jwt.Signer
@@ -45,6 +52,7 @@ type s2sAuthService struct {
 	logger *slog.Logger
 }
 
+// ValidateCredentials checks the provided client ID and secret against the database.
 func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) error {
 
 	var s2sClient types.S2sClient
@@ -62,26 +70,31 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 		FROM client 
 		WHERE uuid = ?`
 	if err := s.sql.SelectRecord(qry, &s2sClient, clientId); err != nil {
-		s.logger.Error("failed to retrieve s2s client record", "err", err.Error())
-		return errors.New("failed to retrieve s2s client record")
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("s2s client with id %s does not exist", clientId)
+		} else {
+			return fmt.Errorf("failed to retrieve s2s client id %s: %v", clientId, err)
+		}
+	}
+
+	// check if client is enabled
+	if !s2sClient.Enabled {
+		return fmt.Errorf("s2s client with id %s is not enabled", clientId)
+	}
+
+	// check if account is locked
+	if s2sClient.AccountLocked {
+		return fmt.Errorf("s2s client with id %s is locked", clientId)
+	}
+
+	// check if account is expired
+	if s2sClient.AccountExpired {
+		return fmt.Errorf("s2s client with id %s has expired", clientId)
 	}
 
 	// validate password
 	if err := s.credService.CompareHashAndPassword(s2sClient.Password, clientSecret); err != nil {
-		s.logger.Error("failed to validate password", "err", err.Error())
-		return errors.New("failed to validate password")
-	}
-
-	if !s2sClient.Enabled {
-		return errors.New("service account disabled")
-	}
-
-	if s2sClient.AccountLocked {
-		return errors.New("service account locked")
-	}
-
-	if s2sClient.AccountExpired {
-		return errors.New("service account expired")
+		return fmt.Errorf("failed to validate credentials for s2s client id %s: %v", clientId, err)
 	}
 
 	return nil
@@ -105,8 +118,7 @@ func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, err
 		WHERE cs.client_uuid = ?
 			AND s.service_name = ?`
 	if err := s.sql.SelectRecords(qry, &scopes, clientId, service); err != nil {
-		s.logger.Error(fmt.Sprintf("failed to retrieve scopes for client %s: %v", clientId, err))
-		return scopes, fmt.Errorf("failed to retrieve scopes for client %s", clientId)
+		return scopes, fmt.Errorf("failed to retrieve scopes for client %s: %v", clientId, err)
 	}
 
 	return scopes, nil
@@ -133,9 +145,17 @@ func (s *s2sAuthService) MintToken(claims jwt.Claims) (*jwt.Token, error) {
 	return &jot, nil
 }
 
-// finds by regenerating blind index
-// decrypts refresh token for use
-func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh, error) {
+// GetRefreshToken gets refresh token from persistence and decrypts it.
+func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken string) (*types.S2sRefresh, error) {
+
+	log := s.logger
+
+	telemetry, ok := connect.GetTelemetryFromContext(ctx)
+	if ok && telemetry != nil {
+		log = log.With(telemetry.TelemetryFields()...)
+	} else {
+		log.Warn("failed to extract context for GetRefreshToken")
+	}
 
 	if len(refreshToken) < 16 || len(refreshToken) > 64 {
 		return nil, errors.New("invalid refresh token")
@@ -180,10 +200,10 @@ func (s *s2sAuthService) GetRefreshToken(refreshToken string) (*types.S2sRefresh
 		go func(id string) {
 			qry := "DELETE FROM refresh WHERE uuid = ?"
 			if err := s.sql.DeleteRecord(qry, id); err != nil {
-				s.logger.Error(fmt.Sprintf("failed to delete expired refresh token with id %s", id), "err", err.Error())
+				log.Error(fmt.Sprintf("failed to delete expired refresh token with id %s", id), "err", err.Error())
 			}
 
-			s.logger.Info(fmt.Sprintf("deleted expired refresh token with id: %s", id))
+			log.Info(fmt.Sprintf("deleted expired refresh token with id: %s", id))
 		}(refresh.Uuid)
 
 		return nil, fmt.Errorf("refresh token xxxxxx-%s is expired", refreshToken[len(refreshToken)-6:])
@@ -383,7 +403,6 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 	qry := "INSERT INTO refresh (uuid, refresh_index, service_name, refresh_token, client_uuid, client_index, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
 	if err := s.sql.InsertRecord(qry, r); err != nil {
-		s.logger.Error("faied to save refresh token", "err", err.Error())
 		return errors.New("failed to save refresh token")
 	}
 	return nil

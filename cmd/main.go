@@ -16,11 +16,12 @@ func main() {
 	jsonHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
-	slog.SetDefault(slog.New(jsonHandler))
+	slog.SetDefault(slog.New(jsonHandler).With(
+		slog.String(util.ServiceKey, util.ServiceS2s),
+	))
 
 	// set up logger for main
 	logger := slog.Default().
-		With(slog.String(util.ServiceKey, util.ServiceS2s)).
 		With(slog.String(util.PackageKey, util.PackageMain)).
 		With(slog.String(util.ComponentKey, util.ComponentMain))
 
@@ -45,20 +46,20 @@ func main() {
 	// load config values for service creation
 	config, err := config.Load(def)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to load %s s2s config: %v", util.ServiceS2s, err))
+		logger.Error(fmt.Sprintf("failed to load %s s2s config", util.ServiceS2s), "err", err.Error())
 		os.Exit(1)
 	}
 
 	s2s, err := s2s.New(*config)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to create %s s2s service: %v", util.ServiceS2s, err))
+		logger.Error(fmt.Sprintf("failed to create %s s2s service", util.ServiceS2s), "err", err.Error())
 		os.Exit(1)
 	}
 
 	defer s2s.CloseDb()
 
 	if err := s2s.Run(); err != nil {
-		logger.Error(fmt.Sprintf("failed to run %s s2s service: %v", util.ServiceS2s, err))
+		logger.Error(fmt.Sprintf("failed to run %s s2s service", util.ServiceS2s), "err", err.Error())
 		os.Exit(1)
 	}
 
