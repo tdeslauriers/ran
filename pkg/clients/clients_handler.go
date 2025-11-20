@@ -98,7 +98,7 @@ func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request, lo
 	}
 
 	// check if iamVerifier is nil, if not nil, validate user token
-	var authorizedUser *jwt.Token
+	authorizedUser := &jwt.Token{}
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
 		authorized, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken)

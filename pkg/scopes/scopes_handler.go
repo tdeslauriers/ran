@@ -42,7 +42,6 @@ func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceS2s)).
 			With(slog.String(util.PackageKey, util.PackageScopes)).
 			With(slog.String(util.ComponentKey, util.ComponentScopes)),
 	}
@@ -129,7 +128,7 @@ func (h *handler) getAllScopes(w http.ResponseWriter, r *http.Request, log *slog
 	}
 
 	// check if iamVerifier is nil, if not nil, validate user token
-	var authorized *jwt.Token
+	authorized := &jwt.Token{}
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
 		authorizedUser, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken)
@@ -190,7 +189,7 @@ func (h *handler) getActiveScopes(w http.ResponseWriter, r *http.Request, log *s
 	}
 
 	// check if iamVerifier is nil, if not nil, validate user token
-	var authorized *jwt.Token
+	authorized := &jwt.Token{}
 	if h.iamVerifier != nil {
 		usrToken := r.Header.Get("Authorization")
 		authorizedUser, err := h.iamVerifier.BuildAuthorized(allowedRead, usrToken)

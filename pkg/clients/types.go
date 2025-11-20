@@ -154,6 +154,7 @@ func (r *RegisterCmd) ValidateCmd() error {
 	return nil
 }
 
+// Client is a model for a json object representing a service Client
 type Client struct {
 	Id             string          `json:"id,omitempty" db:"uuid"`
 	Name           string          `json:"name" db:"name"`
@@ -165,7 +166,7 @@ type Client struct {
 	Slug           string          `json:"slug,omitempty" db:"slug"`
 }
 
-// ValidateCmd performs input validation check on client fields.
+// Validate performs input validation check on client fields.
 func (c *Client) Validate() error {
 
 	if c.Id != "" && !validate.IsValidUuid(c.Id) {
