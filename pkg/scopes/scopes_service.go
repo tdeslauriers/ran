@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
-	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/carapace/pkg/validate"
 	"github.com/tdeslauriers/ran/internal/util"
 )
@@ -18,19 +17,19 @@ import (
 type Service interface {
 
 	// GetScopes returns all scopes, active or inactive
-	GetScopes() ([]types.Scope, error)
+	GetScopes() ([]Scope, error)
 
 	// GetActiveScopes returns all active scopes
-	GetActiveScopes() ([]types.Scope, error)
+	GetActiveScopes() ([]Scope, error)
 
 	// GetScope returns a single scope by slug uuid
-	GetScope(slug string) (*types.Scope, error)
+	GetScope(slug string) (*Scope, error)
 
 	// AddScope adds a new scope record
-	AddScope(scope *types.Scope) (*types.Scope, error)
+	AddScope(scope *Scope) (*Scope, error)
 
 	// UpdateScope updates a scope record
-	UpdateScope(scope *types.Scope) error
+	UpdateScope(scope *Scope) error
 }
 
 // NewSerivce creates a new scopes service interface abstracting a concrete implementation
@@ -55,9 +54,9 @@ type service struct {
 }
 
 // GetScopes is a concrete impl of the Service interface method: returns all scopes, active or inactive
-func (s *service) GetScopes() ([]types.Scope, error) {
+func (s *service) GetScopes() ([]Scope, error) {
 
-	var scopes []types.Scope
+	var scopes []Scope
 	query := `
 			SELECT 
 				uuid, 
@@ -79,9 +78,9 @@ func (s *service) GetScopes() ([]types.Scope, error) {
 }
 
 // GetActiveScopes is a concrete impl of the Service interface method: returns all active scopes
-func (a *service) GetActiveScopes() ([]types.Scope, error) {
+func (a *service) GetActiveScopes() ([]Scope, error) {
 
-	var scopes []types.Scope
+	var scopes []Scope
 	query := `
 			SELECT 
 				uuid, 
@@ -103,7 +102,7 @@ func (a *service) GetActiveScopes() ([]types.Scope, error) {
 }
 
 // GetScope is a concrete impl of the Service interface method: returns a single scope by slug uuid
-func (s *service) GetScope(slug string) (*types.Scope, error) {
+func (s *service) GetScope(slug string) (*Scope, error) {
 
 	// validate slug is well formed uuid
 	if !validate.IsValidUuid(slug) {
@@ -111,7 +110,7 @@ func (s *service) GetScope(slug string) (*types.Scope, error) {
 	}
 
 	// get scope record from db
-	var scope types.Scope
+	var scope Scope
 	query := `SELECT
 				uuid,
 				service_name,
@@ -134,7 +133,7 @@ func (s *service) GetScope(slug string) (*types.Scope, error) {
 }
 
 // AddScope is a concrete impl of the Service interface method: adds a new scope record
-func (s *service) AddScope(scope *types.Scope) (*types.Scope, error) {
+func (s *service) AddScope(scope *Scope) (*Scope, error) {
 
 	// validate scope is not nil and is well formed
 	if scope == nil {
@@ -185,7 +184,7 @@ func (s *service) AddScope(scope *types.Scope) (*types.Scope, error) {
 }
 
 // UpdateScope is a concrete impl of the Service interface method: updates a scope record
-func (s *service) UpdateScope(scope *types.Scope) error {
+func (s *service) UpdateScope(scope *Scope) error {
 
 	// vadiate scope is not nil and is well formed
 	if scope == nil {

@@ -16,9 +16,10 @@ func main() {
 	jsonHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
-	slog.SetDefault(slog.New(jsonHandler).With(
-		slog.String(util.ServiceKey, util.ServiceS2s),
-	))
+
+	// set default logger for all packages to use json format
+	slog.SetDefault(slog.New(jsonHandler).
+		With(slog.String(util.ServiceKey, util.ServiceS2s)))
 
 	// set up logger for main
 	logger := slog.Default().

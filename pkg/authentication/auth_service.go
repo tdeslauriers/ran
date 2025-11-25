@@ -16,6 +16,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
 const (
@@ -23,9 +24,30 @@ const (
 	RefreshDuration time.Duration = time.Duration(180) // minutes
 )
 
+// AuthService is an interface for authentication services that validates credentials, gets scopes, and mints authorization tokens
+type AuthService interface {
+	// ValidateCredentials validates credentials provided by client, whether s2s or user
+	ValidateCredentials(id, secret string) error
+
+	// GetScopes gets scopes specific to a service for a given identifier.
+	// 'user' parameter can be a username or a client id.
+	GetScopes(user, service string) ([]scopes.Scope, error)
+
+	// MintToken builds and signs a jwt token for a given claims struct.
+	// It does not validate or perform checks on these values, it assumes they are valid.
+	MintToken(claims jwt.Claims) (*jwt.Token, error)
+}
+
+// S2sAuthService is an interface for service-to-service authentication services
+// and contains the AuthService interface and the RefreshService interface
+type S2sAuthService interface {
+	AuthService
+	types.RefreshService[types.S2sRefresh]
+}
+
 // NewS2sAuthService creates a new S2sAuthService interface instance returning
 // a pointer to the underlying concrete implementation.
-func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, i data.Indexer, ciph data.Cryptor, creds CredService) types.S2sAuthService {
+func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, i data.Indexer, ciph data.Cryptor, creds CredService) S2sAuthService {
 	return &s2sAuthService{
 		sql:         sql,
 		mint:        mint,
@@ -39,7 +61,7 @@ func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, i data.Indexer, 
 	}
 }
 
-var _ types.S2sAuthService = (*s2sAuthService)(nil)
+var _ S2sAuthService = (*s2sAuthService)(nil)
 
 // s2sAuthService implements the S2sAuthService interface for service-to-service authentication.
 type s2sAuthService struct {
@@ -100,9 +122,9 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 	return nil
 }
 
-func (s *s2sAuthService) GetScopes(clientId, service string) ([]types.Scope, error) {
+func (s *s2sAuthService) GetScopes(clientId, service string) ([]scopes.Scope, error) {
 
-	var scopes []types.Scope
+	var scopes []scopes.Scope
 	qry := `
 		SELECT 
 			s.uuid,

@@ -28,7 +28,7 @@ type LoginHandler interface {
 
 // NewS2sLoginHandler creates a new s2s login handler interface returning
 // a pointer to a concrete implementation
-func NewS2sLoginHandler(service types.S2sAuthService) LoginHandler {
+func NewS2sLoginHandler(service S2sAuthService) LoginHandler {
 	return &s2sLoginHandler{
 		authService: service,
 
@@ -42,7 +42,7 @@ var _ LoginHandler = (*s2sLoginHandler)(nil)
 
 // s2sLoginHandler is a concrete implementation of the LoginHandler interface
 type s2sLoginHandler struct {
-	authService types.S2sAuthService
+	authService S2sAuthService
 
 	logger *slog.Logger
 }

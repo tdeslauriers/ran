@@ -8,7 +8,6 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/carapace/pkg/profile"
 	"github.com/tdeslauriers/ran/internal/util"
 )
 
@@ -57,9 +56,11 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 		// get slug if exists
 		slug := r.PathValue("slug")
 		if slug != "" {
+
 			h.getAllClients(w, r, log)
 			return
 		} else {
+			
 			h.getClientBySlug(w, r, log)
 			return
 		}
@@ -230,7 +231,7 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request, log
 	}
 
 	// get cmd from request body
-	var cmd profile.Client
+	var cmd Client
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -242,7 +243,7 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request, log
 	}
 
 	// validate client
-	if err := cmd.ValidateCmd(); err != nil {
+	if err := cmd.Validate(); err != nil {
 		log.Error("failed to validate client update cmd", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnprocessableEntity,

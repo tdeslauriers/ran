@@ -10,7 +10,6 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/ran/internal/util"
 )
 
@@ -251,7 +250,7 @@ func (h *handler) createScope(w http.ResponseWriter, r *http.Request, log *slog.
 	}
 
 	// get cmd from request body
-	var cmd types.Scope
+	var cmd Scope
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -393,7 +392,7 @@ func (h *handler) updateScope(w http.ResponseWriter, r *http.Request, log *slog.
 	}
 
 	// get cmd from request body
-	var cmd types.Scope
+	var cmd Scope
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -424,7 +423,7 @@ func (h *handler) updateScope(w http.ResponseWriter, r *http.Request, log *slog.
 	}
 
 	// prepare updated scope
-	updated := &types.Scope{
+	updated := &Scope{
 		Uuid:        record.Uuid, // not allowed to update uuid
 		ServiceName: cmd.ServiceName,
 		Scope:       cmd.Scope,

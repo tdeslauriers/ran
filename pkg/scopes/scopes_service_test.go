@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/tdeslauriers/carapace/pkg/session/types"
 )
 
 const (
@@ -51,12 +49,12 @@ func TestGetScope(t *testing.T) {
 func TestUpdateScope(t *testing.T) {
 	testCases := []struct {
 		name  string
-		scope *types.Scope
+		scope *Scope
 		err   error
 	}{
 		{
 			name: "valid scope",
-			scope: &types.Scope{
+			scope: &Scope{
 				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
 				ServiceName: "real-service",
 				Scope:       "r:shaw:*",
@@ -75,7 +73,7 @@ func TestUpdateScope(t *testing.T) {
 		},
 		{
 			name: "invalid slug",
-			scope: &types.Scope{
+			scope: &Scope{
 				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
 				ServiceName: "real-service",
 				Scope:       "r:shaw:*",
@@ -90,7 +88,7 @@ func TestUpdateScope(t *testing.T) {
 
 		{
 			name: "fail invalid service name",
-			scope: &types.Scope{
+			scope: &Scope{
 				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
 				ServiceName: "SERVICE",
 				Scope:       "r:shaw:*",
@@ -104,7 +102,7 @@ func TestUpdateScope(t *testing.T) {
 		},
 		{
 			name: "fail invalid scope",
-			scope: &types.Scope{
+			scope: &Scope{
 				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
 				ServiceName: "real-service",
 				Scope:       "r:sh",
@@ -118,7 +116,7 @@ func TestUpdateScope(t *testing.T) {
 		},
 		{
 			name: "scope not found",
-			scope: &types.Scope{
+			scope: &Scope{
 				Uuid:        "5e614e33-6562-4cda-bc55-c7fec00762fe",
 				ServiceName: "real-service",
 				Scope:       "r:shaw:*",
@@ -152,7 +150,7 @@ func (m *mockSqlRepository) SelectRecords(query string, records interface{}, arg
 }
 func (m *mockSqlRepository) SelectRecord(query string, record interface{}, args ...interface{}) error {
 	switch r := record.(type) {
-	case *types.Scope:
+	case *Scope:
 		if args[0] == ValidScopeSlug {
 			r.Uuid = "5e614e33-6562-4cda-bc55-c7fec00762fe"
 			r.ServiceName = "real-service"

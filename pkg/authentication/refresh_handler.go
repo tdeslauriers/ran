@@ -27,7 +27,7 @@ type S2sRefreshHandler interface {
 
 // NewS2sRefreshHandler creates a new s2s token refresh handler interface returning
 // a pointer to a concrete implementation
-func NewS2sRefreshHandler(service types.S2sAuthService) S2sRefreshHandler {
+func NewS2sRefreshHandler(service S2sAuthService) S2sRefreshHandler {
 	return &s2sRefreshHandler{
 		authService: service,
 
@@ -41,7 +41,7 @@ var _ S2sRefreshHandler = (*s2sRefreshHandler)(nil)
 
 // s2sRefreshHandler is a concrete implementation of the S2sRefreshHandler interface
 type s2sRefreshHandler struct {
-	authService types.S2sAuthService
+	authService S2sAuthService
 
 	logger *slog.Logger
 }

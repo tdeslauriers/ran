@@ -9,7 +9,6 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/ran/internal/util"
 	"github.com/tdeslauriers/ran/pkg/scopes"
 )
@@ -135,7 +134,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// scopes slice being empty indicates all scopes were removed, so still needs to be
 	// submitted to the client service to remove them all.
-	var updated []types.Scope
+	var updated []scopes.Scope
 	if len(cmd.ScopeSlugs) > 0 {
 		for _, slug := range cmd.ScopeSlugs {
 			var exists bool

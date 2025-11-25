@@ -156,14 +156,15 @@ func (r *RegisterCmd) ValidateCmd() error {
 
 // Client is a model for a json object representing a service Client
 type Client struct {
-	Id             string          `json:"id,omitempty" db:"uuid"`
-	Name           string          `json:"name" db:"name"`
-	Owner          string          `json:"owner" db:"owner"`
-	CreatedAt      data.CustomTime `json:"created_at" db:"created_at"`
-	Enabled        bool            `json:"enabled" db:"enabled"`
-	AccountExpired bool            `json:"account_expired" db:"account_expired"`
-	AccountLocked  bool            `json:"account_locked" db:"account_locked"`
-	Slug           string          `json:"slug,omitempty" db:"slug"`
+	Id             string          `json:"id,omitempty"`
+	Name           string          `json:"name"`
+	Owner          string          `json:"owner"`
+	CreatedAt      data.CustomTime `json:"created_at"`
+	Enabled        bool            `json:"enabled"`
+	AccountExpired bool            `json:"account_expired"`
+	AccountLocked  bool            `json:"account_locked"`
+	Slug           string          `json:"slug,omitempty"`
+	Scopes         []scopes.Scope  `json:"scopes,omitempty"`
 }
 
 // Validate performs input validation check on client fields.

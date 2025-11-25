@@ -15,7 +15,6 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/carapace/pkg/schedule"
-	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/carapace/pkg/sign"
 	"github.com/tdeslauriers/ran/internal/util"
 	"github.com/tdeslauriers/ran/pkg/authentication"
@@ -150,7 +149,7 @@ type s2s struct {
 	repository     data.SqlRepository
 	s2sVerifier    jwt.Verifier
 	iamVerifier    jwt.Verifier
-	authService    types.S2sAuthService
+	authService    authentication.S2sAuthService
 	credService    authentication.CredService
 	patTokener     pat.Service
 	scopesService  scopes.Service

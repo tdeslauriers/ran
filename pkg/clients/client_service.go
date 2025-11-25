@@ -12,10 +12,9 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/data"
-	"github.com/tdeslauriers/carapace/pkg/profile"
-	"github.com/tdeslauriers/carapace/pkg/session/types"
 	"github.com/tdeslauriers/carapace/pkg/validate"
 	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
 // ClientService provides clients service operations
@@ -25,12 +24,12 @@ type ClientService interface {
 	GetClients() ([]Client, error)
 
 	// GetClient returns a single service client (and it's assigned scopes) from a slug
-	GetClient(slug string) (*profile.Client, error)
+	GetClient(slug string) (*Client, error)
 
 	// UpdateClient updates a service client record (doesn not include password updates/resets)
 	UpdateClient(client *Client) error
 
-	UpdateScopes(ctx context.Context, client *profile.Client, updated []types.Scope) error
+	UpdateScopes(ctx context.Context, client *Client, updated []scopes.Scope) error
 }
 
 // NewClientService creates a new clients service interface abstracting a concrete implementation
@@ -77,7 +76,7 @@ func (s *clientService) GetClients() ([]Client, error) {
 }
 
 // GetClient is a concrete impl of the Service interface method: returns a single client from a slug
-func (s *clientService) GetClient(slug string) (*profile.Client, error) {
+func (s *clientService) GetClient(slug string) (*Client, error) {
 
 	// validate input
 	if slug == "" {
@@ -119,7 +118,7 @@ func (s *clientService) GetClient(slug string) (*profile.Client, error) {
 	}
 
 	// build client from db records slice
-	client := profile.Client{
+	client := Client{
 		Id:             clientScope[0].ClientId,
 		Name:           clientScope[0].ClientName,
 		Owner:          clientScope[0].Owner,
@@ -139,7 +138,7 @@ func (s *clientService) GetClient(slug string) (*profile.Client, error) {
 			continue
 		}
 
-		client.Scopes = append(client.Scopes, types.Scope{
+		client.Scopes = append(client.Scopes, scopes.Scope{
 			Uuid:        cs.ScopeId,
 			ServiceName: cs.ServiceName,
 			Scope:       cs.Scope,
@@ -186,7 +185,7 @@ func (s *clientService) UpdateClient(client *Client) error {
 }
 
 // UpdateScopes is a concrete impl of the Service interface method: updates a service client's assigned scopes
-func (s *clientService) UpdateScopes(ctx context.Context, client *profile.Client, updated []types.Scope) error {
+func (s *clientService) UpdateScopes(ctx context.Context, client *Client, updated []scopes.Scope) error {
 
 	// create local logger
 	log := s.logger
@@ -215,7 +214,7 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *profile.Client
 
 		// idendify scopes to remove, if any
 		var (
-			toRemove  = make(map[types.Scope]bool)
+			toRemove  = make(map[scopes.Scope]bool)
 			isRemoved bool
 		)
 
@@ -235,7 +234,7 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *profile.Client
 
 		// identify scopes to add, if any
 		var (
-			toAdd   = make(map[types.Scope]bool)
+			toAdd   = make(map[scopes.Scope]bool)
 			isAdded bool
 		)
 		for _, u := range updated {
@@ -264,7 +263,7 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *profile.Client
 			if len(toRemove) > 0 {
 				for scope := range toRemove {
 					wg.Add(1)
-					go func(scope types.Scope) {
+					go func(scope scopes.Scope) {
 						defer wg.Done()
 
 						query := `
@@ -284,7 +283,7 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *profile.Client
 			if len(toAdd) > 0 {
 				for scope := range toAdd {
 					wg.Add(1)
-					go func(scope types.Scope) {
+					go func(scope scopes.Scope) {
 						defer wg.Done()
 
 						xref := ClientScopeXref{
