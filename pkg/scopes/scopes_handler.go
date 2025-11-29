@@ -60,31 +60,31 @@ type handler struct {
 // which handles all requests for a single scope: GET, PUT, POST, DELETE
 func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
-	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
-	log := h.logger.With(tel.TelemetryFields()...)
-
 	switch r.Method {
 	case http.MethodGet:
 
 		slug := r.PathValue("slug")
 		switch slug {
 		case "":
-			h.getAllScopes(w, r, log)
+			h.getAllScopes(w, r)
 		case "active":
-			h.getActiveScopes(w, r, log)
+			h.getActiveScopes(w, r)
 			return
 		default:
-			h.getScopeBySlug(w, r, log)
+			h.getScopeBySlug(w, r)
 			return
 		}
 	case http.MethodPut:
-		h.updateScope(w, r, log)
+		h.updateScope(w, r)
 		return
 	case http.MethodPost:
 
 		slug := r.PathValue("slug")
 		if slug != "add" {
+			// get telemetry from request
+			tel := connect.ObtainTelemetry(r, h.logger)
+			log := h.logger.With(tel.TelemetryFields()...)
+
 			log.Error("only posts to /add are allowed")
 			e := connect.ErrorHttp{
 				StatusCode: http.StatusBadRequest,
@@ -94,9 +94,13 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		h.createScope(w, r, log)
+		h.createScope(w, r)
 		return
 	default:
+		// get telemetry from request
+		tel := connect.ObtainTelemetry(r, h.logger)
+		log := h.logger.With(tel.TelemetryFields()...)
+
 		log.Error(fmt.Sprintf("unsupported method %s for endpoint %s", r.Method, r.URL.Path))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
@@ -107,7 +111,11 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) getAllScopes(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
+func (h *handler) getAllScopes(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
 	var allowedRead []string
@@ -168,7 +176,11 @@ func (h *handler) getAllScopes(w http.ResponseWriter, r *http.Request, log *slog
 }
 
 // getActiveScopes retrieves all active scopes from the database and returns them as a json response
-func (h *handler) getActiveScopes(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
+func (h *handler) getActiveScopes(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
 	var allowedRead []string
@@ -229,7 +241,11 @@ func (h *handler) getActiveScopes(w http.ResponseWriter, r *http.Request, log *s
 }
 
 // createScope handles requests to add a new scope
-func (h *handler) createScope(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
+func (h *handler) createScope(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
@@ -300,7 +316,11 @@ func (h *handler) createScope(w http.ResponseWriter, r *http.Request, log *slog.
 
 // handleGet handles GET requests for a single scope
 // concrete impl for the GET part of HandleScope method
-func (h *handler) getScopeBySlug(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
+func (h *handler) getScopeBySlug(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
@@ -359,7 +379,11 @@ func (h *handler) getScopeBySlug(w http.ResponseWriter, r *http.Request, log *sl
 
 // handlePost handles PUT requests for a single scope
 // concrete impl for the PUT part of HandleScope method
-func (h *handler) updateScope(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
+func (h *handler) updateScope(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")

@@ -46,10 +46,6 @@ type clientHandler struct {
 // concrete impl of the Handler interface method
 func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 
-	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
-	log := h.logger.With(tel.TelemetryFields()...)
-
 	switch r.Method {
 	case http.MethodGet:
 
@@ -57,17 +53,20 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
 		if slug != "" {
 
-			h.getAllClients(w, r, log)
+			h.getAllClients(w, r)
 			return
 		} else {
-			
-			h.getClientBySlug(w, r, log)
+
+			h.getClientBySlug(w, r)
 			return
 		}
 	case http.MethodPut:
-		h.updateClient(w, r, log)
+		h.updateClient(w, r)
 		return
 	default:
+		// get telemetry from request
+		tel := connect.ObtainTelemetry(r, h.logger)
+		log := h.logger.With(tel.TelemetryFields()...)
 		log.Error(fmt.Sprintf("unsupported method %s for endpoint %s", r.Method, r.URL.Path))
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusMethodNotAllowed,
@@ -79,7 +78,11 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 }
 
 // getAllClients handles GET requests for all clients
-func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
+func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
 	var allowedRead []string
@@ -139,7 +142,11 @@ func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request, lo
 }
 
 // getClientBySlug handles GET requests for a single client by slug
-func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
+func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
@@ -197,7 +204,11 @@ func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request, 
 }
 
 // handlePost handles POST requests for a single client
-func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request, log *slog.Logger) {
+func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.

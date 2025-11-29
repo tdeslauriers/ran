@@ -20,6 +20,7 @@ type ResetHandler interface {
 
 // NewResetHandler creates a new service client ResetHandler interface abstracting a concrete implementation
 func NewResetHandler(s Service, s2s, iam jwt.Verifier) ResetHandler {
+
 	return &resetHandler{
 		service:     s,
 		s2sVerifier: s2s,

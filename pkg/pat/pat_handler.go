@@ -32,6 +32,7 @@ type Handler interface {
 
 // NewHandler creates a new personal access token (PAT) handler interface abstracting a concrete implementation
 func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
+
 	return &handler{
 		service: s,
 		s2s:     s2s,

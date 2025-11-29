@@ -28,6 +28,7 @@ type S2sRefreshHandler interface {
 // NewS2sRefreshHandler creates a new s2s token refresh handler interface returning
 // a pointer to a concrete implementation
 func NewS2sRefreshHandler(service S2sAuthService) S2sRefreshHandler {
+	
 	return &s2sRefreshHandler{
 		authService: service,
 

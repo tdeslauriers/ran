@@ -20,6 +20,7 @@ type RegistrationHandler interface {
 
 // NewRegistrationHandler creates a new client registration handler interface abstracting a concrete implementation
 func NewRegistrationHandler(s Service, s2s, iam jwt.Verifier) RegistrationHandler {
+	
 	return &registrationHandler{
 		service:     s,
 		s2sVerifier: s2s,

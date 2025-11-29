@@ -29,6 +29,7 @@ type LoginHandler interface {
 // NewS2sLoginHandler creates a new s2s login handler interface returning
 // a pointer to a concrete implementation
 func NewS2sLoginHandler(service S2sAuthService) LoginHandler {
+	
 	return &s2sLoginHandler{
 		authService: service,
 
