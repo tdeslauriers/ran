@@ -51,7 +51,7 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 
 		// get slug if exists
 		slug := r.PathValue("slug")
-		if slug != "" {
+		if slug == "" {
 
 			h.getAllClients(w, r)
 			return
