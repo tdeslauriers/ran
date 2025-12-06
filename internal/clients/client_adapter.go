@@ -175,3 +175,4 @@ func (r *mariaClientRepository) RemoveScope(clientId, scopeId string) error {
 
 	return nil
 }
+
