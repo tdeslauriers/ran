@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -78,7 +79,7 @@ type Service interface {
 
 // NewService creates a new service interface abstracting a concrete implementations of
 // the ClientService and ClientErrService interfaces
-func NewService(sql data.SqlRepository, creds authentication.CredService) Service {
+func NewService(sql *sql.DB, creds authentication.CredService) Service {
 	return &service{
 		ClientService:       NewClientService(sql),
 		RegistrationService: NewRegistrationService(sql, creds),
@@ -100,6 +101,18 @@ type service struct {
 type ClientRecord struct {
 	Id             string          `json:"id,omitempty" db:"uuid"`
 	Password       string          `json:"password" db:"password"`
+	Name           string          `json:"name" db:"name"`
+	Owner          string          `json:"owner" db:"owner"`
+	CreatedAt      data.CustomTime `json:"created_at" db:"created_at"`
+	Enabled        bool            `json:"enabled" db:"enabled"`
+	AccountExpired bool            `json:"account_expired" db:"account_expired"`
+	AccountLocked  bool            `json:"account_locked" db:"account_locked"`
+	Slug           string          `json:"slug,omitempty" db:"slug"`
+}
+
+// ClientAccount is the model for the client record in the database minus the password
+type ClientAccount struct {
+	Id             string          `json:"id,omitempty" db:"uuid"`
 	Name           string          `json:"name" db:"name"`
 	Owner          string          `json:"owner" db:"owner"`
 	CreatedAt      data.CustomTime `json:"created_at" db:"created_at"`
@@ -154,49 +167,7 @@ func (r *RegisterCmd) ValidateCmd() error {
 	return nil
 }
 
-// Client is a model for a json object representing a service Client
-type Client struct {
-	Id             string          `json:"id,omitempty"`
-	Name           string          `json:"name"`
-	Owner          string          `json:"owner"`
-	CreatedAt      data.CustomTime `json:"created_at"`
-	Enabled        bool            `json:"enabled"`
-	AccountExpired bool            `json:"account_expired"`
-	AccountLocked  bool            `json:"account_locked"`
-	Slug           string          `json:"slug,omitempty"`
-	Scopes         []scopes.Scope  `json:"scopes,omitempty"`
-}
 
-// Validate performs input validation check on client fields.
-func (c *Client) Validate() error {
-
-	if c.Id != "" && !validate.IsValidUuid(c.Id) {
-		return fmt.Errorf("invalid or not well formatted servcice client id")
-	}
-
-	if valid, err := validate.IsValidServiceName(c.Name); !valid {
-		return fmt.Errorf("invalid service client name: %v", err)
-	}
-
-	if err := validate.IsValidName(c.Owner); err != nil {
-		return fmt.Errorf("invalid service client owner: %v", err)
-	}
-
-	// CreatedAt is a timestamp created programmatically,
-	// no validation needed, will be dropped on all updates
-
-	// Enabled is a boolean, no validation needed
-
-	// AccountExpired is a boolean, no validation needed
-
-	// AccountLocked is a boolean, no validation needed
-
-	if c.Slug != "" && !validate.IsValidUuid(c.Slug) {
-		return fmt.Errorf("invalid or not well formatted service client slug")
-	}
-
-	return nil
-}
 
 // Reset is a model for a service client uuid and pw for lookup by reset service
 type Reset struct {
@@ -223,30 +194,6 @@ type ClientScope struct {
 	ScopeCreatedAt string `db:"scope_created_at" json:"created_at"`
 	Active         bool   `db:"active" json:"active"`
 	ScopeSlug      string `db:"scope_slug" json:"slug,omitempty"`
-}
-
-// ClientService is a model for client-scopes cmds received by the client handler
-type ClientScopesCmd struct {
-	ClientSlug string   `json:"client_slug"`
-	ScopeSlugs []string `json:"scope_slugs"` // uuids of the scope slugs => for lookup
-}
-
-// ValidateCmd performs input validation check on client scopes fields.
-func (c *ClientScopesCmd) ValidateCmd() error {
-
-	if !validate.IsValidUuid(c.ClientSlug) {
-		return fmt.Errorf("invalid client slug")
-	}
-
-	if len(c.ScopeSlugs) > 0 {
-		for _, slug := range c.ScopeSlugs {
-			if !validate.IsValidUuid(slug) {
-				return fmt.Errorf("invalid scope slug submitted: all slugs must be valid uuids")
-			}
-		}
-	}
-
-	return nil
 }
 
 // ClientScopeXref is a model for a many-to-many xref table holding clients <--> scopes

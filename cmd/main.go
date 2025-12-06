@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/tdeslauriers/carapace/pkg/config"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/s2s"
 )
 
@@ -19,16 +19,16 @@ func main() {
 
 	// set default logger for all packages to use json format
 	slog.SetDefault(slog.New(jsonHandler).
-		With(slog.String(util.ServiceKey, util.ServiceS2s)))
+		With(slog.String(definitions.ServiceKey, definitions.ServiceS2s)))
 
 	// set up logger for main
 	logger := slog.Default().
-		With(slog.String(util.PackageKey, util.PackageMain)).
-		With(slog.String(util.ComponentKey, util.ComponentMain))
+		With(slog.String(definitions.PackageKey, definitions.PackageMain)).
+		With(slog.String(definitions.ComponentKey, definitions.ComponentMain))
 
 	// service definitions
 	def := config.SvcDefinition{
-		ServiceName: util.ServiceS2s,
+		ServiceName: definitions.ServiceS2s,
 		Tls:         config.MutualTls,
 		Requires: config.Requires{
 			S2sClient:        false,
@@ -47,20 +47,20 @@ func main() {
 	// load config values for service creation
 	config, err := config.Load(def)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to load %s s2s config", util.ServiceS2s), "err", err.Error())
+		logger.Error(fmt.Sprintf("failed to load %s s2s config", definitions.ServiceS2s), "err", err.Error())
 		os.Exit(1)
 	}
 
 	s2s, err := s2s.New(*config)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to create %s s2s service", util.ServiceS2s), "err", err.Error())
+		logger.Error(fmt.Sprintf("failed to create %s s2s service", definitions.ServiceS2s), "err", err.Error())
 		os.Exit(1)
 	}
 
 	defer s2s.CloseDb()
 
 	if err := s2s.Run(); err != nil {
-		logger.Error(fmt.Sprintf("failed to run %s s2s service", util.ServiceS2s), "err", err.Error())
+		logger.Error(fmt.Sprintf("failed to run %s s2s service", definitions.ServiceS2s), "err", err.Error())
 		os.Exit(1)
 	}
 

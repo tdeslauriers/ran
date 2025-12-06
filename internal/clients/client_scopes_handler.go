@@ -9,7 +9,8 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/clients"
 	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
@@ -29,8 +30,8 @@ func NewScopesHandler(s Service, scope scopes.Service, s2s, iam jwt.Verifier) Sc
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageClients)).
-			With(slog.String(util.ComponentKey, util.ComponentClients)),
+			With(slog.String(definitions.PackageKey, definitions.PackageClients)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentClients)),
 	}
 }
 
@@ -84,7 +85,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// decode request body
-	var cmd ClientScopesCmd
+	var cmd clients.ClientScopesCmd
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{

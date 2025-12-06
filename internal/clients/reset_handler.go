@@ -9,7 +9,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/profile"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
 // ResetHandler provides http handlers for service client password reset requests
@@ -27,8 +27,8 @@ func NewResetHandler(s Service, s2s, iam jwt.Verifier) ResetHandler {
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageClients)).
-			With(slog.String(util.ComponentKey, util.ComponentClients))}
+			With(slog.String(definitions.PackageKey, definitions.PackageClients)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentClients))}
 }
 
 var _ ResetHandler = (*resetHandler)(nil)

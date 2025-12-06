@@ -10,11 +10,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
-
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/carapace/pkg/validate"
-	"github.com/tdeslauriers/ran/internal/util"
-	"github.com/tdeslauriers/ran/pkg/clients"
+	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/clients"
 )
 
 // Service is an interface for personal access token services
@@ -36,9 +35,9 @@ func NewService(sql data.SqlRepository, p exo.PatTokener) Service {
 		pat: p,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceKey)).
-			With(slog.String(util.PackageKey, util.PackagePAT)).
-			With(slog.String(util.ComponentKey, util.ComponentPatService)),
+			With(slog.String(definitions.ServiceKey, definitions.ServiceKey)).
+			With(slog.String(definitions.PackageKey, definitions.PackagePAT)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentPatService)),
 	}
 }
 
@@ -275,7 +274,7 @@ func (s *service) IntrospectPat(token string) (*exo.IntrospectResponse, error) {
 		Scope:       sb.String(),
 		Sub:         scopes[0].ClientId,
 		ServiceName: scopes[0].ServiceName,
-		Iss:         util.SericeName,
+		Iss:         definitions.SericeName,
 	}, nil
 }
 

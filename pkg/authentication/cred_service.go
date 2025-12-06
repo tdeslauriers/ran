@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"math/big"
 
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
 const (
@@ -36,8 +36,8 @@ func NewCredService(secret []byte) CredService {
 		secret: secret,
 
 		logger: slog.Default().
-			With(slog.String(util.ComponentKey, util.ComponentCreds)).
-			With(slog.String(util.PackageKey, util.PackageAuthentication)),
+			With(slog.String(definitions.ComponentKey, definitions.ComponentCreds)).
+			With(slog.String(definitions.PackageKey, definitions.PackageAuthentication)),
 	}
 }
 

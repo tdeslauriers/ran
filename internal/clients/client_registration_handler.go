@@ -8,7 +8,7 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
 // RegistrationHandler provides an interface for handling client registration requests
@@ -20,15 +20,15 @@ type RegistrationHandler interface {
 
 // NewRegistrationHandler creates a new client registration handler interface abstracting a concrete implementation
 func NewRegistrationHandler(s Service, s2s, iam jwt.Verifier) RegistrationHandler {
-	
+
 	return &registrationHandler{
 		service:     s,
 		s2sVerifier: s2s,
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageClients)).
-			With(slog.String(util.ComponentKey, util.ComponentRegister)),
+			With(slog.String(definitions.PackageKey, definitions.PackageClients)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentRegister)),
 	}
 }
 

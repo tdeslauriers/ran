@@ -10,7 +10,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/pat"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
 // authorization scopes required
@@ -39,9 +39,9 @@ func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
 		iam:     iam,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceKey)).
-			With(slog.String(util.PackageKey, util.PackagePAT)).
-			With(slog.String(util.ComponentKey, util.ComponentPatHandler)),
+			With(slog.String(definitions.ServiceKey, definitions.ServiceKey)).
+			With(slog.String(definitions.PackageKey, definitions.PackagePAT)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentPatHandler)),
 	}
 }
 

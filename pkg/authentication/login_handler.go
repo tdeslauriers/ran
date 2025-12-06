@@ -14,7 +14,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/provider"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
 const loginFailedMsg string = "login failed due to server error."
@@ -29,13 +29,13 @@ type LoginHandler interface {
 // NewS2sLoginHandler creates a new s2s login handler interface returning
 // a pointer to a concrete implementation
 func NewS2sLoginHandler(service S2sAuthService) LoginHandler {
-	
+
 	return &s2sLoginHandler{
 		authService: service,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageAuthentication)).
-			With(slog.String(util.ComponentKey, util.ComponentLogin)),
+			With(slog.String(definitions.PackageKey, definitions.PackageAuthentication)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentLogin)),
 	}
 }
 
@@ -145,7 +145,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 
 	claims := jwt.Claims{
 		Jti:       jti.String(),
-		Issuer:    util.SericeName,
+		Issuer:    definitions.SericeName,
 		Subject:   cmd.ClientId,
 		Audience:  types.BuildAudiences(scopesBuilder.String()),
 		IssuedAt:  currentTime.Unix(),

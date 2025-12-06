@@ -4,8 +4,8 @@ go 1.24.0
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/tdeslauriers/carapace v0.2.2
-	golang.org/x/crypto v0.44.0
+	github.com/tdeslauriers/carapace v0.2.4
+	golang.org/x/crypto v0.45.0
 )
 
 require (

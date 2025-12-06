@@ -1,13 +1,15 @@
 package clients
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/clients"
 	"github.com/tdeslauriers/ran/pkg/authentication"
 )
 
@@ -15,18 +17,18 @@ import (
 type RegistrationService interface {
 
 	// RegisterClient registers a new service client
-	Register(cmd *RegisterCmd) (*Client, error)
+	Register(cmd *RegisterCmd) (*clients.Client, error)
 }
 
 // NewRegistrationService creates a new client registration service interface abstracting a concrete implementation
-func NewRegistrationService(sql data.SqlRepository, creds authentication.CredService) RegistrationService {
+func NewRegistrationService(sql *sql.DB, creds authentication.CredService) RegistrationService {
 	return &registrationService{
 		sql:   sql,
 		creds: creds,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageClients)).
-			With(slog.String(util.ComponentKey, util.ComponentRegister)),
+			With(slog.String(definitions.PackageKey, definitions.PackageClients)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentRegister)),
 	}
 }
 
@@ -34,14 +36,14 @@ var _ RegistrationService = (*registrationService)(nil)
 
 // registrationService is a concrete implementation of the RegistrationService interface
 type registrationService struct {
-	sql   data.SqlRepository
+	sql   *sql.DB
 	creds authentication.CredService // used to hash passwords for storage
 
 	logger *slog.Logger
 }
 
 // RegisterClient is the concrete impl of the RegistrationService interface method: registers a new service client.
-func (s *registrationService) Register(cmd *RegisterCmd) (*Client, error) {
+func (s *registrationService) Register(cmd *RegisterCmd) (*clients.Client, error) {
 
 	// validate client data
 	// redundant validation, but good practice
@@ -93,12 +95,12 @@ func (s *registrationService) Register(cmd *RegisterCmd) (*Client, error) {
 			account_locked,
 			slug)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	if err := s.sql.InsertRecord(query, client); err != nil {
+	if err := data.InsertRecord[ClientRecord](s.sql, query, client); err != nil {
 		return nil, fmt.Errorf("failed to insert service client %s record: %v", client.Name, err)
 	}
 
 	// changing type from ClientRecord to Client so password is not returned
-	return &Client{
+	return &clients.Client{
 		Id:             client.Id,
 		Name:           client.Name,
 		Owner:          client.Owner,

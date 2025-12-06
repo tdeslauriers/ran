@@ -10,7 +10,7 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
 // service endpoints require s2s-only endpoint scopes
@@ -41,8 +41,8 @@ func NewHandler(s Service, s2s, iam jwt.Verifier) Handler {
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageScopes)).
-			With(slog.String(util.ComponentKey, util.ComponentScopes)),
+			With(slog.String(definitions.PackageKey, definitions.PackageScopes)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentScopes)),
 	}
 }
 

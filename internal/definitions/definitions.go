@@ -1,4 +1,4 @@
-package util
+package definitions
 
 const (
 	SericeName string = "ran"

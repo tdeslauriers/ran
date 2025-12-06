@@ -16,9 +16,9 @@ import (
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/carapace/pkg/schedule"
 	"github.com/tdeslauriers/carapace/pkg/sign"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/clients"
+	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/authentication"
-	"github.com/tdeslauriers/ran/pkg/clients"
 	"github.com/tdeslauriers/ran/pkg/pat"
 	"github.com/tdeslauriers/ran/pkg/scopes"
 )
@@ -133,10 +133,10 @@ func New(config config.Config) (S2s, error) {
 		credService:    credSvc,
 		patTokener:     pat.NewService(repository, tokener),
 		scopesService:  scopes.NewSerivce(repository),
-		clientsService: clients.NewService(repository, credSvc),
+		clientsService: clients.NewService(db, credSvc),
 		cleanup:        schedule.NewCleanup(repository),
 
-		logger: slog.Default().With(slog.String(util.ComponentKey, util.ComponentS2s)),
+		logger: slog.Default().With(slog.String(definitions.ComponentKey, definitions.ComponentS2s)),
 	}, nil
 
 }

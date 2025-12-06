@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/validate"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
 // Service provides scopes service operations
@@ -38,9 +38,9 @@ func NewSerivce(sql data.SqlRepository) Service {
 		sql: sql,
 
 		logger: slog.Default().
-			With(slog.String(util.ServiceKey, util.ServiceKey)).
-			With(slog.String(util.PackageKey, util.PackageScopes)).
-			With(slog.String(util.ComponentKey, util.ComponentScopes)),
+			With(slog.String(definitions.ServiceKey, definitions.ServiceKey)).
+			With(slog.String(definitions.PackageKey, definitions.PackageScopes)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentScopes)),
 	}
 }
 

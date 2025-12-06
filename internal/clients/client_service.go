@@ -6,14 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
-	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/validate"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/clients"
 	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
@@ -21,25 +19,26 @@ import (
 type ClientService interface {
 
 	// GetClients returns all service clients, active or inactive
-	GetClients() ([]Client, error)
+	GetClients() ([]ClientAccount, error)
 
 	// GetClient returns a single service client (and it's assigned scopes) from a slug
-	GetClient(slug string) (*Client, error)
+	GetClient(slug string) (*clients.Client, error)
 
 	// UpdateClient updates a service client record (doesn not include password updates/resets)
-	UpdateClient(client *Client) error
+	UpdateClient(client *clients.Client) error
 
-	UpdateScopes(ctx context.Context, client *Client, updated []scopes.Scope) error
+	UpdateScopes(ctx context.Context, client *clients.Client, updated []scopes.Scope) error
 }
 
 // NewClientService creates a new clients service interface abstracting a concrete implementation
-func NewClientService(sql data.SqlRepository) ClientService {
+func NewClientService(sql *sql.DB) ClientService {
+
 	return &clientService{
-		sql: sql,
+		sql: NewClientRepository(sql),
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageClients)).
-			With(slog.String(util.ComponentKey, util.ComponentClients)),
+			With(slog.String(definitions.PackageKey, definitions.PackageClients)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentClients)),
 	}
 }
 
@@ -47,36 +46,19 @@ var _ ClientService = (*clientService)(nil)
 
 // clientService is a concrete implementation of the Service interface
 type clientService struct {
-	sql data.SqlRepository
+	sql ClientRepository
 
 	logger *slog.Logger
 }
 
 // GetClients is a concrete impl of the Service interface method: returns all clients, active or inactive
-func (s *clientService) GetClients() ([]Client, error) {
+func (s *clientService) GetClients() ([]ClientAccount, error) {
 
-	var clients []Client
-	query := `
-			SELECT
-				uuid,
-				name,
-				owner,
-				created_at,
-				enabled,
-				account_expired,
-				account_locked,
-				slug
-			FROM client`
-	err := s.sql.SelectRecords(query, &clients)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get clients from db: %v", err)
-	}
-
-	return clients, nil
+	return s.sql.FindAll()
 }
 
 // GetClient is a concrete impl of the Service interface method: returns a single client from a slug
-func (s *clientService) GetClient(slug string) (*Client, error) {
+func (s *clientService) GetClient(slug string) (*clients.Client, error) {
 
 	// validate input
 	if slug == "" {
@@ -87,50 +69,26 @@ func (s *clientService) GetClient(slug string) (*Client, error) {
 		return nil, fmt.Errorf("invalid or not well formatted service client slug")
 	}
 
-	var clientScope []ClientScope
-	query := `
-			SELECT
-				c.uuid AS client_id,
-				c.name AS client_name,
-				c.owner,
-				c.created_at AS client_created_at,
-				c.enabled,
-				c.account_expired,
-				c.account_locked,
-				c.slug AS client_slug,
-				COALESCE(s.uuid, '') AS scope_id,
-				COALESCE(s.service_name, '') AS service_name,
-				COALESCE(s.scope, '') AS scope,
-				COALESCE(s.name, '') AS scope_name,
-				COALESCE(s.description, '') AS description,
-				COALESCE(s.created_at, '') AS scope_created_at,
-				COALESCE(s.active, FALSE) AS active,
-				COALESCE(s.slug, '') AS scope_slug
-			FROM client c
-				LEFT OUTER JOIN client_scope cs ON c.uuid = cs.client_uuid
-				LEFT OUTER JOIN scope s ON cs.scope_uuid = s.uuid
-			WHERE c.slug = ?`
-	if err := s.sql.SelectRecords(query, &clientScope, slug); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("service client not found for slug: %s", slug)
-		}
-		return nil, fmt.Errorf("failed to get service client from db: %v", err)
+	// get clientscopes records slice from the database
+	clientScopes, err := s.sql.FindClientScopes(slug)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service client and its scopes from db: %v", err)
 	}
 
 	// build client from db records slice
-	client := Client{
-		Id:             clientScope[0].ClientId,
-		Name:           clientScope[0].ClientName,
-		Owner:          clientScope[0].Owner,
-		CreatedAt:      clientScope[0].ClientCreatedAt,
-		Enabled:        clientScope[0].Enabled,
-		AccountExpired: clientScope[0].AccountExpired,
-		AccountLocked:  clientScope[0].AccountLocked,
-		Slug:           clientScope[0].CLientSlug,
+	client := clients.Client{
+		Id:             clientScopes[0].ClientId,
+		Name:           clientScopes[0].ClientName,
+		Owner:          clientScopes[0].Owner,
+		CreatedAt:      clientScopes[0].ClientCreatedAt,
+		Enabled:        clientScopes[0].Enabled,
+		AccountExpired: clientScopes[0].AccountExpired,
+		AccountLocked:  clientScopes[0].AccountLocked,
+		Slug:           clientScopes[0].CLientSlug,
 	}
 
 	// build scopes from db records slice
-	for _, cs := range clientScope {
+	for _, cs := range clientScopes {
 		// emtpy scope id means no scope(s) assigned to service client
 		// id will be empty (instead of null: null causes reflection err)
 		// because of the coalesce syntax in the query
@@ -154,7 +112,7 @@ func (s *clientService) GetClient(slug string) (*Client, error) {
 }
 
 // UpdateClient is a concrete impl of the Service interface method: updates a service client record
-func (s *clientService) UpdateClient(client *Client) error {
+func (s *clientService) UpdateClient(client *clients.Client) error {
 
 	// validate client is not nil
 	if client == nil {
@@ -168,24 +126,15 @@ func (s *clientService) UpdateClient(client *Client) error {
 	}
 
 	// update client record
-	query := `
-			UPDATE 
-				client SET
-					name = ?,
-					owner = ?,
-					enabled = ?,
-					account_expired = ?,
-					account_locked = ?
-			WHERE slug = ?`
-	if err := s.sql.UpdateRecord(query, client.Name, client.Owner, client.Enabled, client.AccountExpired, client.AccountLocked, client.Slug); err != nil {
-		return err
+	if err := s.sql.Update(client); err != nil {
+		return fmt.Errorf("failed to update service client %s: %v", client.Name, err)
 	}
 
 	return nil
 }
 
 // UpdateScopes is a concrete impl of the Service interface method: updates a service client's assigned scopes
-func (s *clientService) UpdateScopes(ctx context.Context, client *Client, updated []scopes.Scope) error {
+func (s *clientService) UpdateScopes(ctx context.Context, client *clients.Client, updated []scopes.Scope) error {
 
 	// create local logger
 	log := s.logger
@@ -266,15 +215,12 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *Client, update
 					go func(scope scopes.Scope) {
 						defer wg.Done()
 
-						query := `
-								DELETE 
-								FROM client_scope
-								WHERE client_uuid = ? AND scope_uuid = ?`
-						if err := s.sql.DeleteRecord(query, client.Id, scope.Uuid); err != nil {
-							errChan <- fmt.Errorf("%s for scope %s from client %s: %v", ErrRemoveXref, scope.Name, client.Name, err)
+						if err := s.sql.RemoveScope(client.Id, scope.Uuid); err != nil {
+
+							errChan <- fmt.Errorf("failed to delete xref for scope %s - client %s: %v", scope.Name, client.Name, err)
 						}
 
-						log.Info(fmt.Sprintf("successfully removed xref record for scope %s from client %s", scope.Name, client.Name))
+						log.Info(fmt.Sprintf("successfully deleted xref for scope %s - client %s", scope.Name, client.Name))
 					}(scope)
 				}
 			}
@@ -286,24 +232,13 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *Client, update
 					go func(scope scopes.Scope) {
 						defer wg.Done()
 
-						xref := ClientScopeXref{
-							ClientId:  client.Id,
-							ScopeId:   scope.Uuid,
-							CreatedAt: data.CustomTime{Time: time.Now().UTC()},
+						if err := s.sql.AddScope(client.Id, scope.Uuid); err != nil {
+							errChan <- fmt.Errorf("failed to add xref record beteween scope %s and client %s: %v",
+								scope.Name, client.Name, err)
 						}
 
-						query := `
-								INSERT INTO client_scope (
-									client_uuid, 
-									scope_uuid, 
-									created_at
-								)
-								VALUES (?, ?, ?)`
-						if err := s.sql.InsertRecord(query, xref); err != nil {
-							errChan <- fmt.Errorf("%s for scope %s to client %s: %v", ErrAddXref, scope.Name, client.Name, err)
-						}
-
-						log.Info(fmt.Sprintf("successfully added xref record for scope %s to client %s", scope.Name, client.Name))
+						log.Info(fmt.Sprintf("successfully added xref between scope %s and client %s",
+							scope.Name, client.Name))
 					}(scope)
 				}
 			}
@@ -313,20 +248,12 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *Client, update
 			close(errChan)
 
 			// check for errors
-			errCount := len(errChan)
-			if errCount > 0 {
-				var sb strings.Builder
-				counter := 0
-				for i := 0; i < errCount; i++ {
-					for err := range errChan {
-						sb.WriteString(err.Error())
-						if counter+1 < errCount {
-							sb.WriteString("; ")
-						}
-						counter++
-					}
+			if len(errChan) > 0 {
+				var errs []error
+				for err := range errChan {
+					errs = append(errs, err)
 				}
-				return errors.New(sb.String())
+				return fmt.Errorf("error(s) occurred updating client %s's scopes: %v", client.Name, errors.Join(errs...))
 			}
 		}
 	}

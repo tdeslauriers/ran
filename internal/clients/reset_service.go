@@ -7,7 +7,7 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/profile"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/authentication"
 )
 
@@ -19,14 +19,14 @@ type ResetService interface {
 }
 
 // NewResetService creates a new service client ResetService interface abstracting a concrete implementation
-func NewResetService(sql data.SqlRepository, creds authentication.CredService) ResetService {
+func NewResetService(sql *sql.DB, creds authentication.CredService) ResetService {
 	return &resetService{
 		sql:   sql,
 		creds: creds,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageClients)).
-			With(slog.String(util.ComponentKey, util.ComponentReset)),
+			With(slog.String(definitions.PackageKey, definitions.PackageClients)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentReset)),
 	}
 }
 
@@ -34,7 +34,7 @@ var _ ResetService = (*resetService)(nil)
 
 // resetService is a concrete implementation of the ResetService interface
 type resetService struct {
-	sql   data.SqlRepository
+	sql   *sql.DB
 	creds authentication.CredService // used to hash passwords for storage
 
 	logger *slog.Logger
@@ -55,12 +55,12 @@ func (s *resetService) ResetPassword(cmd profile.ResetCmd) error {
 		return fmt.Errorf("new password must be different from current password")
 	}
 
-	// validate client exists
-	var record Reset
+	// look up client record
 	qry := "SELECT uuid, password FROM client WHERE uuid = ?"
-	if err := s.sql.SelectRecord(qry, &record, cmd.ResourceId); err != nil {
+	record, err := data.SelectOneRecord[Reset](s.sql, qry, cmd.ResourceId)
+	if err != nil {
 		if err == sql.ErrNoRows {
-			return fmt.Errorf("%s: %s", ErrClientNotFound, cmd.ResourceId)
+			return fmt.Errorf("service client not found: %s", cmd.ResourceId)
 		} else {
 			return fmt.Errorf("failed to retrieve service client record %s for password reset: %v", cmd.ResourceId, err)
 		}
@@ -79,7 +79,7 @@ func (s *resetService) ResetPassword(cmd profile.ResetCmd) error {
 
 	// update password in client table
 	qry = "UPDATE client SET password = ? WHERE uuid = ?"
-	if err := s.sql.UpdateRecord(qry, newHash, cmd.ResourceId); err != nil {
+	if err := data.UpdateRecord(s.sql, qry, newHash, cmd.ResourceId); err != nil {
 		return fmt.Errorf("failed to update service client %s password: %v", cmd.ResourceId, err)
 	}
 

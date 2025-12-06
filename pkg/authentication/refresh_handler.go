@@ -15,7 +15,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/provider"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
 // S2sRefreshHandler provides methods for handling s2s token refresh operations
@@ -28,13 +28,13 @@ type S2sRefreshHandler interface {
 // NewS2sRefreshHandler creates a new s2s token refresh handler interface returning
 // a pointer to a concrete implementation
 func NewS2sRefreshHandler(service S2sAuthService) S2sRefreshHandler {
-	
+
 	return &s2sRefreshHandler{
 		authService: service,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageAuthentication)).
-			With(slog.String(util.ComponentKey, util.ComponentRefresh)),
+			With(slog.String(definitions.PackageKey, definitions.PackageAuthentication)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentRefresh)),
 	}
 }
 
@@ -161,7 +161,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 
 		claims := jwt.Claims{
 			Jti:       jti.String(),
-			Issuer:    util.SericeName,
+			Issuer:    definitions.SericeName,
 			Subject:   refresh.ClientId,
 			Audience:  types.BuildAudiences(scopesBuilder.String()),
 			IssuedAt:  currentTime.Unix(),

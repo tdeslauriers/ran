@@ -8,7 +8,8 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/clients"
 )
 
 // ClientHandler provides http handlers for client (model) requests
@@ -26,8 +27,8 @@ func NewClientHandler(s Service, s2s, iam jwt.Verifier) ClientHandler {
 		iamVerifier: iam,
 
 		logger: slog.Default().
-			With(slog.String(util.PackageKey, util.PackageClients)).
-			With(slog.String(util.ComponentKey, util.ComponentClients)),
+			With(slog.String(definitions.PackageKey, definitions.PackageClients)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentClients)),
 	}
 }
 
@@ -242,7 +243,7 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get cmd from request body
-	var cmd Client
+	var cmd clients.Client
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -273,7 +274,7 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// prepare updated client
-	updated := &Client{
+	updated := &clients.Client{
 		Id:             record.Id, // not allowed to update id
 		Name:           cmd.Name,
 		Owner:          cmd.Owner,

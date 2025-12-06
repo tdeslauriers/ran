@@ -15,7 +15,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
-	"github.com/tdeslauriers/ran/internal/util"
+	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/scopes"
 )
 
@@ -56,8 +56,8 @@ func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, i data.Indexer, 
 		credService: creds,
 
 		logger: slog.Default().
-			With(slog.String(util.ComponentKey, util.ComponentAuthn)).
-			With(util.PackageKey, util.PackageAuthentication),
+			With(slog.String(definitions.ComponentKey, definitions.ComponentAuthn)).
+			With(definitions.PackageKey, definitions.PackageAuthentication),
 	}
 }
 
