@@ -62,17 +62,17 @@ func (s *clientService) GetClient(slug string) (*clients.Client, error) {
 
 	// validate input
 	if slug == "" {
-		return nil, fmt.Errorf("service client slug is required")
+		return nil, errors.New("service client slug is required")
 	}
 
 	if !validate.IsValidUuid(slug) {
-		return nil, fmt.Errorf("invalid or not well formatted service client slug")
+		return nil, errors.New("invalid or not well formatted service client slug")
 	}
 
 	// get clientscopes records slice from the database
 	clientScopes, err := s.sql.FindClientScopes(slug)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get service client and its scopes from db: %v", err)
+		return nil, err
 	}
 
 	// build client from db records slice
@@ -149,7 +149,7 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *clients.Client
 
 	// validate client is not nil
 	if client == nil {
-		return errors.New(ErrClientMissing)
+		return fmt.Errorf("service client is missing")
 	}
 
 	// if client scopes and updated scopes are both empty, return

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/profile"
 	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/authentication"
@@ -21,7 +20,7 @@ type ResetService interface {
 // NewResetService creates a new service client ResetService interface abstracting a concrete implementation
 func NewResetService(sql *sql.DB, creds authentication.CredService) ResetService {
 	return &resetService{
-		sql:   sql,
+		sql:   NewResetRepository(sql),
 		creds: creds,
 
 		logger: slog.Default().
@@ -34,7 +33,7 @@ var _ ResetService = (*resetService)(nil)
 
 // resetService is a concrete implementation of the ResetService interface
 type resetService struct {
-	sql   *sql.DB
+	sql   ResetRepository
 	creds authentication.CredService // used to hash passwords for storage
 
 	logger *slog.Logger
@@ -56,19 +55,14 @@ func (s *resetService) ResetPassword(cmd profile.ResetCmd) error {
 	}
 
 	// look up client record
-	qry := "SELECT uuid, password FROM client WHERE uuid = ?"
-	record, err := data.SelectOneRecord[Reset](s.sql, qry, cmd.ResourceId)
+	record, err := s.sql.FindById(cmd.ResourceId)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("service client not found: %s", cmd.ResourceId)
-		} else {
-			return fmt.Errorf("failed to retrieve service client record %s for password reset: %v", cmd.ResourceId, err)
-		}
+		return err
 	}
 
 	// validate current password
 	if err := s.creds.CompareHashAndPassword(record.Password, cmd.CurrentPassword); err != nil {
-		return fmt.Errorf("%s for service client: %s", ErrIncorrectPassword, cmd.ResourceId)
+		return fmt.Errorf("%s for service client: %s", "password is incorrect", cmd.ResourceId)
 	}
 
 	// hash new password
@@ -78,9 +72,8 @@ func (s *resetService) ResetPassword(cmd profile.ResetCmd) error {
 	}
 
 	// update password in client table
-	qry = "UPDATE client SET password = ? WHERE uuid = ?"
-	if err := data.UpdateRecord(s.sql, qry, newHash, cmd.ResourceId); err != nil {
-		return fmt.Errorf("failed to update service client %s password: %v", cmd.ResourceId, err)
+	if err := s.sql.UpdatePassword(record.ClientId, newHash); err != nil {
+		return err
 	}
 
 	return nil

@@ -103,7 +103,11 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 	// reset client password
 	if err := h.service.ResetPassword(cmd); err != nil {
 		log.Error(fmt.Sprintf("failed to reset password for service client %s", cmd.ResourceId), "err", err.Error())
-		h.service.HandleServiceError(w, err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("failed to reset password for service client %s", cmd.ResourceId),
+		}
+		e.SendJsonErr(w)
 		return
 	}
 

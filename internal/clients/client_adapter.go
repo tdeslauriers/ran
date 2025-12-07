@@ -2,6 +2,7 @@ package clients
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -93,9 +94,9 @@ func (r *mariaClientRepository) FindClientScopes(slug string) ([]ClientScope, er
 	clientScopes, err := data.SelectRecords[ClientScope](r.sql, query, slug)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("service client not found for slug: %s", slug)
+			return nil, errors.New("service client not found")
 		}
-		return nil, fmt.Errorf("failed to get service client from db: %v", err)
+		return nil, fmt.Errorf("failed to look up client and scopes in database, %v", err)
 	}
 
 	return clientScopes, nil
@@ -175,4 +176,3 @@ func (r *mariaClientRepository) RemoveScope(clientId, scopeId string) error {
 
 	return nil
 }
-

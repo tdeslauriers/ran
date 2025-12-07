@@ -9,6 +9,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/clients"
 )
 
 // RegistrationHandler provides an interface for handling client registration requests
@@ -80,7 +81,7 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 	}
 
 	// decode request body
-	var cmd RegisterCmd
+	var cmd clients.RegisterCmd
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode registration cmd request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -131,7 +132,11 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 	client, err := h.service.Register(&cmd)
 	if err != nil {
 		log.Error("failed to register client", "err", err.Error())
-		h.service.HandleServiceError(w, err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("failed to register client %s", cmd.Name),
+		}
+		e.SendJsonErr(w)
 		return
 	}
 

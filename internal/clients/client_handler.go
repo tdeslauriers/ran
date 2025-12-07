@@ -184,7 +184,11 @@ func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request) 
 	client, err := h.service.GetClient(slug)
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to get client - slug %s", slug), "err", err.Error())
-		h.service.HandleServiceError(w, err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("failed to get client - slug %s", slug),
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
@@ -268,8 +272,12 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
 	// look up record in db
 	record, err := h.service.GetClient(slug)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to get client - slug %s", slug), "err", err.Error())
-		h.service.HandleServiceError(w, err)
+		log.Error("failed to get client", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("failed to get client - slug %s", slug),
+		}
+		e.SendJsonErr(w)
 		return
 	}
 
@@ -289,7 +297,11 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
 	err = h.service.UpdateClient(updated)
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to update client %s - slug %s", updated.Name, updated.Slug), "err", err.Error())
-		h.service.HandleServiceError(w, err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("failed to update client %s", updated.Name),
+		}
+		e.SendJsonErr(w)
 		return
 	}
 

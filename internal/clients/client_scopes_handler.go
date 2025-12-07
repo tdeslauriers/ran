@@ -163,7 +163,11 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 	// Note: empty scopes slice indicates all scopes were removed --> valid request --> update client record
 	if err := h.clientSvc.UpdateScopes(ctx, client, updated); err != nil {
 		log.Error(fmt.Sprintf("failed to update client slug %s's scopes", client.Id), "err", err.Error())
-		h.clientSvc.HandleServiceError(w, err)
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to update client's scopes",
+		}
+		e.SendJsonErr(w)
 		return
 	}
 

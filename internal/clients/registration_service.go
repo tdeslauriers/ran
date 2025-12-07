@@ -17,13 +17,13 @@ import (
 type RegistrationService interface {
 
 	// RegisterClient registers a new service client
-	Register(cmd *RegisterCmd) (*clients.Client, error)
+	Register(cmd *clients.RegisterCmd) (*clients.Client, error)
 }
 
 // NewRegistrationService creates a new client registration service interface abstracting a concrete implementation
 func NewRegistrationService(sql *sql.DB, creds authentication.CredService) RegistrationService {
 	return &registrationService{
-		sql:   sql,
+		sql:   NewRegistrationRepository(sql),
 		creds: creds,
 
 		logger: slog.Default().
@@ -36,14 +36,14 @@ var _ RegistrationService = (*registrationService)(nil)
 
 // registrationService is a concrete implementation of the RegistrationService interface
 type registrationService struct {
-	sql   *sql.DB
+	sql   RegistrationRepository
 	creds authentication.CredService // used to hash passwords for storage
 
 	logger *slog.Logger
 }
 
 // RegisterClient is the concrete impl of the RegistrationService interface method: registers a new service client.
-func (s *registrationService) Register(cmd *RegisterCmd) (*clients.Client, error) {
+func (s *registrationService) Register(cmd *clients.RegisterCmd) (*clients.Client, error) {
 
 	// validate client data
 	// redundant validation, but good practice
@@ -83,20 +83,8 @@ func (s *registrationService) Register(cmd *RegisterCmd) (*clients.Client, error
 	}
 
 	// insert client record into db
-	query := `
-		INSERT INTO client (
-			uuid,
-			password,
-			name,
-			owner,
-			created_at,
-			enabled,
-			account_expired,
-			account_locked,
-			slug)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	if err := data.InsertRecord[ClientRecord](s.sql, query, client); err != nil {
-		return nil, fmt.Errorf("failed to insert service client %s record: %v", client.Name, err)
+	if err := s.sql.Create(client); err != nil {
+		return nil, err
 	}
 
 	// changing type from ClientRecord to Client so password is not returned

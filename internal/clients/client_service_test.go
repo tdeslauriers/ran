@@ -503,7 +503,7 @@ func TestUpdateScopes(t *testing.T) {
 			mockRepo:    &mockClientRepository{},
 			expectError: true,
 			validateError: func(t *testing.T, err error) {
-				if !strings.Contains(err.Error(), ErrClientMissing) {
+				if !errors.Is(err, errors.New("service client is missing")) {
 					t.Errorf("expected ErrClientMissing, got %q", err.Error())
 				}
 			},
