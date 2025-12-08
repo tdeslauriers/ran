@@ -91,11 +91,7 @@ type ClientAccount struct {
 	Slug           string          `json:"slug,omitempty" db:"slug"`
 }
 
-// Reset is a model for a service client uuid and pw for lookup by reset service
-type Reset struct {
-	ClientId string `db:"uuid"`
-	Password string `db:"password"`
-}
+
 
 // ClientScope is a model for a database join query of a client and its associated scopes
 type ClientScope struct {

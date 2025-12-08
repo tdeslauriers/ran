@@ -1,4 +1,4 @@
-package clients
+package reset
 
 import (
 	"database/sql"

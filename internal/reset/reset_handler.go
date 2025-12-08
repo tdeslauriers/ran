@@ -1,4 +1,4 @@
-package clients
+package reset
 
 import (
 	"encoding/json"
@@ -9,6 +9,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/profile"
+	"github.com/tdeslauriers/ran/internal/clients"
 	"github.com/tdeslauriers/ran/internal/definitions"
 )
 
@@ -19,7 +20,7 @@ type ResetHandler interface {
 }
 
 // NewResetHandler creates a new service client ResetHandler interface abstracting a concrete implementation
-func NewResetHandler(s Service, s2s, iam jwt.Verifier) ResetHandler {
+func NewResetHandler(s ResetService, s2s, iam jwt.Verifier) ResetHandler {
 
 	return &resetHandler{
 		service:     s,
@@ -35,7 +36,7 @@ var _ ResetHandler = (*resetHandler)(nil)
 
 // resetHandler is a concrete implementation of the ResetHandler interface
 type resetHandler struct {
-	service     Service
+	service     ResetService
 	s2sVerifier jwt.Verifier
 	iamVerifier jwt.Verifier
 
@@ -61,7 +62,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// validate s2stoken
 	svcToken := r.Header.Get("Service-Authorization")
-	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(UserAllowedWrite, svcToken)
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(clients.UserAllowedWrite, svcToken)
 	if err != nil {
 		log.Error("failed to authorize s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
@@ -70,7 +71,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// validate iam access token
 	accessToken := r.Header.Get("Authorization")
-	authorized, err := h.iamVerifier.BuildAuthorized(UserAllowedWrite, accessToken)
+	authorized, err := h.iamVerifier.BuildAuthorized(clients.UserAllowedWrite, accessToken)
 	if err != nil {
 		log.Error("failed to authorize iam access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
