@@ -61,7 +61,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// validate s2stoken
 	svcToken := r.Header.Get("Service-Authorization")
-	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken)
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(UserAllowedWrite, svcToken)
 	if err != nil {
 		log.Error("failed to authorize s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
@@ -70,7 +70,7 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 
 	// validate iam access token
 	accessToken := r.Header.Get("Authorization")
-	authorized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, accessToken)
+	authorized, err := h.iamVerifier.BuildAuthorized(UserAllowedWrite, accessToken)
 	if err != nil {
 		log.Error("failed to authorize iam access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)

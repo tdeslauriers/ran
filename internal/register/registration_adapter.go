@@ -1,17 +1,18 @@
-package clients
+package register
 
 import (
 	"database/sql"
 	"fmt"
 
 	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/ran/internal/clients"
 )
 
 // RegistrationRepository provides client registration repository/persistance operations
 type RegistrationRepository interface {
 
 	// Create inserts a new client record into the database
-	Create(client ClientRecord) error
+	Create(client clients.ClientRecord) error
 }
 
 // NewRegistrationRepository creates a new registration repository interface abstracting a concrete implementation
@@ -30,7 +31,7 @@ type mariaRegistrationRepository struct {
 }
 
 // Create is a concrete impl of the RegistrationRepository interface method: inserts a new client record into the database
-func (r *mariaRegistrationRepository) Create(client ClientRecord) error {
+func (r *mariaRegistrationRepository) Create(client clients.ClientRecord) error {
 
 	// insert client record into db
 	query := `

@@ -1,4 +1,4 @@
-package clients
+package register
 
 import (
 	"encoding/json"
@@ -8,8 +8,9 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
+	"github.com/tdeslauriers/ran/internal/clients"
 	"github.com/tdeslauriers/ran/internal/definitions"
-	"github.com/tdeslauriers/ran/pkg/api/clients"
+	"github.com/tdeslauriers/ran/pkg/api/register"
 )
 
 // RegistrationHandler provides an interface for handling client registration requests
@@ -20,10 +21,16 @@ type RegistrationHandler interface {
 }
 
 // NewRegistrationHandler creates a new client registration handler interface abstracting a concrete implementation
-func NewRegistrationHandler(s Service, s2s, iam jwt.Verifier) RegistrationHandler {
+func NewRegistrationHandler(
+	r RegistrationService,
+	c clients.ClientService,
+	s2s jwt.Verifier,
+	iam jwt.Verifier,
+) RegistrationHandler {
 
 	return &registrationHandler{
-		service:     s,
+		service:     r,
+		client:      c,
 		s2sVerifier: s2s,
 		iamVerifier: iam,
 
@@ -37,7 +44,8 @@ var _ RegistrationHandler = (*registrationHandler)(nil)
 
 // registrationHandler is a concrete implementation of the RegistrationHandler interface
 type registrationHandler struct {
-	service     Service
+	service     RegistrationService
+	client      clients.ClientService
 	s2sVerifier jwt.Verifier
 	iamVerifier jwt.Verifier
 
@@ -65,7 +73,7 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 	// validate s2s token
 	svcToken := r.Header.Get("Service-Authorization")
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
-	if _, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken); err != nil {
+	if _, err := h.s2sVerifier.BuildAuthorized(clients.UserAllowedWrite, svcToken); err != nil {
 		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
 		return
@@ -73,7 +81,7 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
-	authroized, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, usrToken)
+	authroized, err := h.iamVerifier.BuildAuthorized(clients.UserAllowedWrite, usrToken)
 	if err != nil {
 		log.Error("failed to validate user access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
@@ -81,7 +89,7 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 	}
 
 	// decode request body
-	var cmd clients.RegisterCmd
+	var cmd register.RegisterCmd
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode registration cmd request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -103,8 +111,8 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// get all current clients (to make sure not already registered or duplicate)
-	clients, err := h.service.GetClients()
+	// get all current all (to make sure not already registered or duplicate)
+	all, err := h.client.GetClients()
 	if err != nil {
 		log.Error("failed to get clients from persistance", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -116,7 +124,7 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 	}
 
 	// check for duplicate client
-	for _, client := range clients {
+	for _, client := range all {
 		if cmd.Name == client.Name {
 			log.Error(fmt.Sprintf("client name %s already exists", cmd.Name))
 			e := connect.ErrorHttp{

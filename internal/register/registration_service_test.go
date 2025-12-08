@@ -1,4 +1,4 @@
-package clients
+package register
 
 import (
 	"errors"
@@ -8,15 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tdeslauriers/ran/pkg/api/clients"
+	"github.com/tdeslauriers/ran/internal/clients"
+	apiClt "github.com/tdeslauriers/ran/pkg/api/clients"
+	api "github.com/tdeslauriers/ran/pkg/api/register"
 )
 
 // mockRegistrationRepository implements RegistrationRepository for testing
 type mockRegistrationRepository struct {
-	createFunc func(client ClientRecord) error
+	createFunc func(client clients.ClientRecord) error
 }
 
-func (m *mockRegistrationRepository) Create(client ClientRecord) error {
+func (m *mockRegistrationRepository) Create(client clients.ClientRecord) error {
 	if m.createFunc != nil {
 		return m.createFunc(client)
 	}
@@ -57,23 +59,23 @@ func (m *mockCredService) GenerateAccessToken() (string, error) {
 func TestRegister(t *testing.T) {
 	tests := []struct {
 		name           string
-		cmd            *clients.RegisterCmd
+		cmd            *api.RegisterCmd
 		mockRepo       *mockRegistrationRepository
 		mockCreds      *mockCredService
 		expectError    bool
 		validateError  func(*testing.T, error)
-		validateResult func(*testing.T, *clients.Client)
+		validateResult func(*testing.T, *apiClt.Client)
 	}{
 		{
 			name: "successfully registers new client",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "testclient",
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
 				ConfirmPassword: "SecureP@ssw0rd123",
 			},
 			mockRepo: &mockRegistrationRepository{
-				createFunc: func(client ClientRecord) error {
+				createFunc: func(client clients.ClientRecord) error {
 					// Validate the client record being created
 					if client.Name != "testclient" {
 						t.Errorf("expected name 'testclient', got %q", client.Name)
@@ -111,7 +113,7 @@ func TestRegister(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateResult: func(t *testing.T, client *clients.Client) {
+			validateResult: func(t *testing.T, client *apiClt.Client) {
 				if client == nil {
 					t.Fatal("expected client, got nil")
 				}
@@ -143,7 +145,7 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "validates client name is required",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "", // Invalid - empty name
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
@@ -161,7 +163,7 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "validates owner name is required",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:     "testclient",
 				Owner:    "", // Invalid - empty owner
 				Password: "SecureP@ssw0rd123",
@@ -177,7 +179,7 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "validates password is required",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:     "testclient",
 				Owner:    "test owner",
 				Password: "", // Invalid - empty password
@@ -193,7 +195,7 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "password hashing error is returned",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "testclient",
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
@@ -217,14 +219,14 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "repository create error is returned",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "testclient",
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
 				ConfirmPassword: "SecureP@ssw0rd123",
 			},
 			mockRepo: &mockRegistrationRepository{
-				createFunc: func(client ClientRecord) error {
+				createFunc: func(client clients.ClientRecord) error {
 					return errors.New("database insert failed")
 				},
 			},
@@ -242,14 +244,14 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "creates enabled account by default",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "testclient",
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
 				ConfirmPassword: "SecureP@ssw0rd123",
 			},
 			mockRepo: &mockRegistrationRepository{
-				createFunc: func(client ClientRecord) error {
+				createFunc: func(client clients.ClientRecord) error {
 					if !client.Enabled {
 						t.Error("expected new client to be enabled by default")
 					}
@@ -268,7 +270,7 @@ func TestRegister(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateResult: func(t *testing.T, client *clients.Client) {
+			validateResult: func(t *testing.T, client *apiClt.Client) {
 				if !client.Enabled {
 					t.Error("expected enabled client")
 				}
@@ -282,14 +284,14 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "generates unique ID and slug",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "testclient",
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
 				ConfirmPassword: "SecureP@ssw0rd123",
 			},
 			mockRepo: &mockRegistrationRepository{
-				createFunc: func(client ClientRecord) error {
+				createFunc: func(client clients.ClientRecord) error {
 					// Verify ID is a valid UUID format
 					if len(client.Id) != 36 { // UUID length with hyphens
 						t.Errorf("expected UUID format for ID, got %q (length %d)", client.Id, len(client.Id))
@@ -320,7 +322,7 @@ func TestRegister(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateResult: func(t *testing.T, client *clients.Client) {
+			validateResult: func(t *testing.T, client *apiClt.Client) {
 				if client.Id == "" {
 					t.Error("expected ID to be generated")
 				}
@@ -334,14 +336,14 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "sets creation timestamp",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "testclient",
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
 				ConfirmPassword: "SecureP@ssw0rd123",
 			},
 			mockRepo: &mockRegistrationRepository{
-				createFunc: func(client ClientRecord) error {
+				createFunc: func(client clients.ClientRecord) error {
 					// Verify timestamp is recent (within last 5 seconds)
 					now := time.Now()
 					diff := now.Sub(client.CreatedAt.Time)
@@ -357,7 +359,7 @@ func TestRegister(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateResult: func(t *testing.T, client *clients.Client) {
+			validateResult: func(t *testing.T, client *apiClt.Client) {
 				// Verify timestamp is set and recent
 				now := time.Now()
 				diff := now.Sub(client.CreatedAt.Time)
@@ -368,14 +370,14 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "password is hashed before storage",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "testclient",
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
 				ConfirmPassword: "SecureP@ssw0rd123",
 			},
 			mockRepo: &mockRegistrationRepository{
-				createFunc: func(client ClientRecord) error {
+				createFunc: func(client clients.ClientRecord) error {
 					// Verify password is hashed, not plain text
 					if client.Password == "SecureP@ssw0rd123" {
 						t.Error("password should be hashed, not plain text")
@@ -398,14 +400,14 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name: "response does not include password (security)",
-			cmd: &clients.RegisterCmd{
+			cmd: &api.RegisterCmd{
 				Name:            "testclient",
 				Owner:           "test owner",
 				Password:        "SecureP@ssw0rd123",
 				ConfirmPassword: "SecureP@ssw0rd123",
 			},
 			mockRepo: &mockRegistrationRepository{
-				createFunc: func(client ClientRecord) error {
+				createFunc: func(client clients.ClientRecord) error {
 					return nil
 				},
 			},
@@ -415,7 +417,7 @@ func TestRegister(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateResult: func(t *testing.T, client *clients.Client) {
+			validateResult: func(t *testing.T, client *apiClt.Client) {
 				// The clients.Client type should not have a Password field
 				// This is verified by the type system, but we can document it
 				// If clients.Client had a Password field, this wouldn't compile
@@ -466,7 +468,7 @@ func TestRegister_IDGeneration(t *testing.T) {
 	var capturedID, capturedSlug string
 
 	mockRepo := &mockRegistrationRepository{
-		createFunc: func(client ClientRecord) error {
+		createFunc: func(client clients.ClientRecord) error {
 			capturedID = client.Id
 			capturedSlug = client.Slug
 			return nil
@@ -485,7 +487,7 @@ func TestRegister_IDGeneration(t *testing.T) {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
-	cmd := &clients.RegisterCmd{
+	cmd := &api.RegisterCmd{
 		Name:            "testclient",
 		Owner:           "test owner",
 		Password:        "TerriblePassword1!",
@@ -525,7 +527,7 @@ func TestRegister_MultipleCallsGenerateUniqueIDs(t *testing.T) {
 	var slugs []string
 
 	mockRepo := &mockRegistrationRepository{
-		createFunc: func(client ClientRecord) error {
+		createFunc: func(client clients.ClientRecord) error {
 			ids = append(ids, client.Id)
 			slugs = append(slugs, client.Slug)
 			return nil
@@ -544,7 +546,7 @@ func TestRegister_MultipleCallsGenerateUniqueIDs(t *testing.T) {
 		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 
-	cmd := &clients.RegisterCmd{
+	cmd := &api.RegisterCmd{
 		Name:            "testclient",
 		Owner:           "test owner",
 		Password:        "TerriblePassword1!",

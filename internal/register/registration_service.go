@@ -1,4 +1,4 @@
-package clients
+package register
 
 import (
 	"database/sql"
@@ -8,8 +8,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/ran/internal/clients"
 	"github.com/tdeslauriers/ran/internal/definitions"
-	"github.com/tdeslauriers/ran/pkg/api/clients"
+	api "github.com/tdeslauriers/ran/pkg/api/clients"
+	"github.com/tdeslauriers/ran/pkg/api/register"
 	"github.com/tdeslauriers/ran/pkg/authentication"
 )
 
@@ -17,7 +19,7 @@ import (
 type RegistrationService interface {
 
 	// RegisterClient registers a new service client
-	Register(cmd *clients.RegisterCmd) (*clients.Client, error)
+	Register(cmd *register.RegisterCmd) (*api.Client, error)
 }
 
 // NewRegistrationService creates a new client registration service interface abstracting a concrete implementation
@@ -43,7 +45,7 @@ type registrationService struct {
 }
 
 // RegisterClient is the concrete impl of the RegistrationService interface method: registers a new service client.
-func (s *registrationService) Register(cmd *clients.RegisterCmd) (*clients.Client, error) {
+func (s *registrationService) Register(cmd *register.RegisterCmd) (*api.Client, error) {
 
 	// validate client data
 	// redundant validation, but good practice
@@ -70,7 +72,7 @@ func (s *registrationService) Register(cmd *clients.RegisterCmd) (*clients.Clien
 	}
 
 	// prepare service client record
-	client := ClientRecord{
+	client := clients.ClientRecord{
 		Id:             id.String(),
 		Password:       string(hashed),
 		Name:           cmd.Name,
@@ -88,7 +90,7 @@ func (s *registrationService) Register(cmd *clients.RegisterCmd) (*clients.Clien
 	}
 
 	// changing type from ClientRecord to Client so password is not returned
-	return &clients.Client{
+	return &api.Client{
 		Id:             client.Id,
 		Name:           client.Name,
 		Owner:          client.Owner,

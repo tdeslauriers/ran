@@ -20,7 +20,8 @@ type ClientHandler interface {
 }
 
 // NewClientHandler creates a new ClientHandler interface, returning a pointer to a concrete implementation
-func NewClientHandler(s Service, s2s, iam jwt.Verifier) ClientHandler {
+func NewClientHandler(s ClientService, s2s, iam jwt.Verifier) ClientHandler {
+
 	return &clientHandler{
 		service:     s,
 		s2sVerifier: s2s,
@@ -36,7 +37,7 @@ var _ ClientHandler = (*clientHandler)(nil)
 
 // clientHandler is a concrete implementation of the ClientHandler interface
 type clientHandler struct {
-	service     Service
+	service     ClientService
 	s2sVerifier jwt.Verifier
 	iamVerifier jwt.Verifier
 
@@ -88,9 +89,9 @@ func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request) {
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
 	var allowedRead []string
 	if h.iamVerifier == nil {
-		allowedRead = s2sAllowedRead
+		allowedRead = S2sAllowedRead
 	} else {
-		allowedRead = userAllowedRead
+		allowedRead = UserAllowedRead
 	}
 
 	// validate service token
@@ -152,7 +153,7 @@ func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request) 
 	// validate s2s token
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
 	svcToken := r.Header.Get("Service-Authorization")
-	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedRead, svcToken)
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(UserAllowedRead, svcToken)
 	if err != nil {
 		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
@@ -161,7 +162,7 @@ func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request) 
 
 	// validate user access token
 	usrToken := r.Header.Get("Authorization")
-	authorizedUser, err := h.iamVerifier.BuildAuthorized(userAllowedRead, usrToken)
+	authorizedUser, err := h.iamVerifier.BuildAuthorized(UserAllowedRead, usrToken)
 	if err != nil {
 		log.Error("failed to validate user access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
@@ -218,7 +219,7 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
 	// validate s2s token
 	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
 	svcToken := r.Header.Get("Service-Authorization")
-	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(userAllowedWrite, svcToken)
+	authorizedSvc, err := h.s2sVerifier.BuildAuthorized(UserAllowedWrite, svcToken)
 	if err != nil {
 		log.Error("failed to validate s2s token", "err", err.Error())
 		connect.RespondAuthFailure(connect.S2s, err, w)
@@ -227,7 +228,7 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
 
 	// validate user access token
 	userToken := r.Header.Get("Authorization")
-	authorizedUser, err := h.iamVerifier.BuildAuthorized(userAllowedWrite, userToken)
+	authorizedUser, err := h.iamVerifier.BuildAuthorized(UserAllowedWrite, userToken)
 	if err != nil {
 		log.Error("failed to validate user access token", "err", err.Error())
 		connect.RespondAuthFailure(connect.User, err, w)
