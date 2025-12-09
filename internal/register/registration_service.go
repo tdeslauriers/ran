@@ -8,11 +8,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/tdeslauriers/carapace/pkg/data"
+	"github.com/tdeslauriers/ran/internal/authentication"
 	"github.com/tdeslauriers/ran/internal/clients"
 	"github.com/tdeslauriers/ran/internal/definitions"
 	api "github.com/tdeslauriers/ran/pkg/api/clients"
 	"github.com/tdeslauriers/ran/pkg/api/register"
-	"github.com/tdeslauriers/ran/pkg/authentication"
 )
 
 // RegistrationService provides client registration service operations

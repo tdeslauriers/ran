@@ -13,59 +13,6 @@ var S2sAllowedRead []string = []string{"r:ran:s2s:clients:*"}
 var UserAllowedRead = []string{"r:ran:clients:*", "r:ran:*"}
 var UserAllowedWrite = []string{"w:ran:clients:*", "w:ran:*"}
 
-// // Handler provides http handlers for service client requests
-// type Handler interface {
-// 	ClientHandler
-// 	RegistrationHandler
-// 	ResetHandler
-// 	ScopesHanlder
-// }
-
-// // NewHandler creates a new service client Handler interface abstracting a concrete implementations
-// func NewHandler(s Service, scope scopes.Service, s2s, iam jwt.Verifier) Handler {
-// 	return &handler{
-// 		ClientHandler:       NewClientHandler(s, s2s, iam),
-// 		RegistrationHandler: NewRegistrationHandler(s, s2s, iam),
-// 		ResetHandler:        NewResetHandler(s, s2s, iam),
-// 		ScopesHanlder:       NewScopesHandler(s, scope, s2s, iam),
-// 	}
-// }
-
-// var _ Handler = (*handler)(nil)
-
-// // handler is a concrete implementation of the Handler interface abstracting smaller interfaces
-// type handler struct {
-// 	ClientHandler
-// 	RegistrationHandler
-// 	ResetHandler
-// 	ScopesHanlder
-// }
-
-// // Service provides client service operations, it aggregates the ClientService, RegistrationService, and ResetService interfaces
-// type Service interface {
-// 	ClientService
-// 	RegistrationService
-// 	ResetService
-// }
-
-// // NewService creates a new service interface abstracting a concrete implementations of
-// // the ClientService and ClientErrService interfaces
-// func NewService(sql *sql.DB, creds authentication.CredService) Service {
-// 	return &service{
-// 		ClientService:       NewClientService(sql),
-// 		RegistrationService: NewRegistrationService(sql, creds),
-// 		ResetService:        NewResetService(sql, creds),
-// 	}
-// }
-
-// var _ Service = (*service)(nil)
-
-// type service struct {
-// 	ClientService
-// 	RegistrationService
-// 	ResetService
-// }
-
 // ClientRecord is a model for a client record in the database, including password
 type ClientRecord struct {
 	Id             string          `json:"id,omitempty" db:"uuid"`
@@ -90,8 +37,6 @@ type ClientAccount struct {
 	AccountLocked  bool            `json:"account_locked" db:"account_locked"`
 	Slug           string          `json:"slug,omitempty" db:"slug"`
 }
-
-
 
 // ClientScope is a model for a database join query of a client and its associated scopes
 type ClientScope struct {

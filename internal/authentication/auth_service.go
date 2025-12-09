@@ -47,9 +47,9 @@ type S2sAuthService interface {
 
 // NewS2sAuthService creates a new S2sAuthService interface instance returning
 // a pointer to the underlying concrete implementation.
-func NewS2sAuthService(sql data.SqlRepository, mint jwt.Signer, i data.Indexer, ciph data.Cryptor, creds CredService) S2sAuthService {
+func NewS2sAuthService(sql *sql.DB, mint jwt.Signer, i data.Indexer, ciph data.Cryptor, creds CredService) S2sAuthService {
 	return &s2sAuthService{
-		sql:         sql,
+		sql:         NewAuthRepository(sql),
 		mint:        mint,
 		indexer:     i,
 		cryptor:     ciph,
@@ -65,7 +65,7 @@ var _ S2sAuthService = (*s2sAuthService)(nil)
 
 // s2sAuthService implements the S2sAuthService interface for service-to-service authentication.
 type s2sAuthService struct {
-	sql         data.SqlRepository
+	sql         AuthRepository
 	mint        jwt.Signer
 	indexer     data.Indexer
 	cryptor     data.Cryptor
@@ -77,75 +77,43 @@ type s2sAuthService struct {
 // ValidateCredentials checks the provided client ID and secret against the database.
 func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) error {
 
-	var s2sClient types.S2sClient
-	qry := `
-		SELECT 
-			uuid, 
-			password, 
-			name, 
-			owner, 
-			created_at, 
-			enabled, 
-			account_expired, 
-			account_locked, 
-			slug
-		FROM client 
-		WHERE uuid = ?`
-	if err := s.sql.SelectRecord(qry, &s2sClient, clientId); err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("s2s client with id %s does not exist", clientId)
-		} else {
-			return fmt.Errorf("failed to retrieve s2s client id %s: %v", clientId, err)
-		}
+	// get record from the database if exists
+	c, err := s.sql.GetClientById(clientId)
+	if err != nil {
+		return err
 	}
 
 	// check if client is enabled
-	if !s2sClient.Enabled {
+	if !c.Enabled {
 		return fmt.Errorf("s2s client with id %s is not enabled", clientId)
 	}
 
 	// check if account is locked
-	if s2sClient.AccountLocked {
+	if c.AccountLocked {
 		return fmt.Errorf("s2s client with id %s is locked", clientId)
 	}
 
 	// check if account is expired
-	if s2sClient.AccountExpired {
+	if c.AccountExpired {
 		return fmt.Errorf("s2s client with id %s has expired", clientId)
 	}
 
 	// validate password
-	if err := s.credService.CompareHashAndPassword(s2sClient.Password, clientSecret); err != nil {
+	if err := s.credService.CompareHashAndPassword(c.Password, clientSecret); err != nil {
 		return fmt.Errorf("failed to validate credentials for s2s client id %s: %v", clientId, err)
 	}
 
 	return nil
 }
 
+// GetScopes gets scopes specific to a service for a given client id.
 func (s *s2sAuthService) GetScopes(clientId, service string) ([]scopes.Scope, error) {
 
-	var scopes []scopes.Scope
-	qry := `
-		SELECT 
-			s.uuid,
-			s.service_name,
-			s.scope,
-			s.name,
-			s.description,
-			s.created_at,
-			s.active,
-			slug
-		FROM scope s 
-			LEFT JOIN client_scope cs ON s.uuid = cs.scope_uuid
-		WHERE cs.client_uuid = ?
-			AND s.service_name = ?`
-	if err := s.sql.SelectRecords(qry, &scopes, clientId, service); err != nil {
-		return scopes, fmt.Errorf("failed to retrieve scopes for client %s: %v", clientId, err)
-	}
-
-	return scopes, nil
+	// get scopes from database
+	return s.sql.GetScopes(clientId, service)
 }
 
+// MintToken builds and signs a jwt token for a given claims struct.
 // assumes credentials already validated
 func (s *s2sAuthService) MintToken(claims jwt.Claims) (*jwt.Token, error) {
 
@@ -190,24 +158,9 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 	}
 
 	// look up refresh
-	var refresh types.S2sRefresh
-	qry := `
-		SELECT 
-			uuid, 
-			refresh_index,
-			service_name,
-			refresh_token, 
-			client_uuid, 
-			client_index,
-			created_at, 
-			revoked 
-		FROM refresh
-		WHERE refresh_index = ?`
-	if err := s.sql.SelectRecord(qry, &refresh, index); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("refresh token xxxxxx-%s does not exist", refreshToken[len(refreshToken)-6:])
-		}
-		return nil, fmt.Errorf("failed to lookup refresh token xxxxxx-%s: %v", refreshToken[len(refreshToken)-6:], err)
+	refresh, err := s.sql.FindRefreshToken(index)
+	if err != nil {
+		return nil, err
 	}
 
 	// check revoked status
@@ -220,9 +173,11 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 
 		// opportunistically delete expired refresh token
 		go func(id string) {
-			qry := "DELETE FROM refresh WHERE uuid = ?"
-			if err := s.sql.DeleteRecord(qry, id); err != nil {
-				log.Error(fmt.Sprintf("failed to delete expired refresh token with id %s", id), "err", err.Error())
+
+			// delete refresh from db
+			if err := s.sql.DeleteRefreshById(id); err != nil {
+				log.Error(fmt.Sprintf("failed to delete expired refresh token with id: %s", id), slog.String("error", err.Error()))
+				return
 			}
 
 			log.Info(fmt.Sprintf("deleted expired refresh token with id: %s", id))
@@ -272,7 +227,8 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 
 		decrypted, err := s.cryptor.DecryptServiceData(client)
 		if err != nil {
-			ch <- fmt.Errorf("failed to decrypt client id %s for refresh token xxxxxx-%s: %v", client, refreshToken[len(refreshToken)-6:], err)
+			ch <- fmt.Errorf("failed to decrypt client id %s for refresh token xxxxxx-%s: %v",
+				client, refreshToken[len(refreshToken)-6:], err)
 			return
 		}
 		*decryptedClient = (string(decrypted))
@@ -284,16 +240,12 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 
 	// check for errors and consolidate
 	if len(errChan) > 0 {
-		var builder strings.Builder
-		count := 0
+		var errs []error
 		for e := range errChan {
-			builder.WriteString(e.Error())
-			if count < len(errChan)-1 {
-				builder.WriteString("; ")
-			}
-			count++
+			errs = append(errs, e)
 		}
-		return nil, errors.New(builder.String())
+		return nil, fmt.Errorf("errors occurred during decryption of refresh token xxxxxx-%s: %s",
+			refreshToken[len(refreshToken)-6:], errors.Join(errs...))
 	}
 
 	// update refresh struct with decrypted values
@@ -301,7 +253,7 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 	refresh.RefreshToken = decryptedRefresh
 	refresh.ClientId = decryptedClient
 
-	return &refresh, nil
+	return refresh, nil
 }
 
 // creates primary key and blind index
@@ -423,10 +375,11 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 	r.ClientId = encryptedClient
 	r.ClientIndex = clientIndex
 
-	qry := "INSERT INTO refresh (uuid, refresh_index, service_name, refresh_token, client_uuid, client_index, created_at, revoked) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-	if err := s.sql.InsertRecord(qry, r); err != nil {
-		return errors.New("failed to save refresh token")
+	// persist refresh token to db
+	if err := s.sql.InsertRefreshToken(r); err != nil {
+		return fmt.Errorf("failed to persist refresh token: %v", err)
 	}
+
 	return nil
 }
 
@@ -444,25 +397,55 @@ func (s *s2sAuthService) DestroyRefresh(token string) error {
 		return fmt.Errorf("failed to generate blind index for refresh token xxxxxx-%s: %v", token[len(token)-6:], err)
 	}
 
-	// calling record to validate it exists
-	// TODO: update crud functions in carapace to return rows affected so calls can be consolidated.
-	qry := `SELECT EXISTS (SELECT 1 FROM refresh WHERE refresh_index = ?)`
-	if exists, err := s.sql.SelectExists(qry, index); err != nil {
-		return fmt.Errorf("failed to lookup refresh token xxxxxx-%s record: %v", token[len(token)-6:], err)
-	} else if !exists {
-		return fmt.Errorf("refresh token xxxxxx-%s record does not exist", token[len(token)-6:])
+	// lookup refresh to validate it exists
+	exists, err := s.sql.RefreshExists(index)
+	if err != nil {
+		return fmt.Errorf("failed to verify existence of refresh token xxxxxx-%s: %v", token[len(token)-6:], err)
+	}
+	if !exists {
+		return fmt.Errorf("refresh token xxxxxx-%s does not exist", token[len(token)-6:])
 	}
 
 	// delete record
-	qry = `DELETE FROM refresh WHERE refresh_index = ?`
-	if err := s.sql.DeleteRecord(qry, index); err != nil {
-		return fmt.Errorf("failed to delete refresh token xxxxxx-%s record: %v", token[len(token)-6:], err)
+	if err := s.sql.DeleteRefreshByIndex(index); err != nil {
+		return fmt.Errorf("failed to delete refresh token xxxxxx-%s: %v", token[len(token)-6:], err)
 	}
 
 	return nil
 }
 
-// TODO: implement
+// RevokeRefresh marks a refresh token as revoked in the database.
 func (s *s2sAuthService) RevokeRefresh(token string) error {
+
+	// light validation: redundant check, but good practice
+	if len(token) < 16 || len(token) > 64 {
+		return fmt.Errorf("invalid refresh token: must be between %d and %d characters", 16, 64)
+	}
+
+	// create blind index
+	index, err := s.indexer.ObtainBlindIndex(token)
+	if err != nil {
+		return fmt.Errorf("failed to generate blind index for refresh token xxxxxx-%s: %v", token[len(token)-6:], err)
+	}
+
+	// lookup refresh token record
+	refresh, err := s.sql.FindRefreshToken(index)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve refresh token xxxxxx-%s for revocation: %v", token[len(token)-6:], err)
+	}
+
+	// check if already revoked
+	if refresh.Revoked {
+		return fmt.Errorf("refresh token xxxxxx-%s is already revoked", token[len(token)-6:])
+	}
+
+	// mark as revoked
+	refresh.Revoked = true
+
+	// update record in db
+	if err := s.sql.UpdateRefreshToken(*refresh); err != nil {
+		return fmt.Errorf("failed to revoke refresh token xxxxxx-%s: %v", token[len(token)-6:], err)
+	}
+
 	return nil
 }

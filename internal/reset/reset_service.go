@@ -6,8 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/tdeslauriers/carapace/pkg/profile"
+	"github.com/tdeslauriers/ran/internal/authentication"
 	"github.com/tdeslauriers/ran/internal/definitions"
-	"github.com/tdeslauriers/ran/pkg/authentication"
 )
 
 // ResetService provides service client password reset operations

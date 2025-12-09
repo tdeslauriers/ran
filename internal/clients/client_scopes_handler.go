@@ -22,7 +22,7 @@ type ScopesHanlder interface {
 }
 
 // NewScopesHandler creates a new service client ScopesHanlder interface abstracting a concrete implementation
-func NewScopesHandler(s Service, scope scopes.Service, s2s, iam jwt.Verifier) ScopesHanlder {
+func NewScopesHandler(s ClientService, scope scopes.Service, s2s, iam jwt.Verifier) ScopesHanlder {
 	return &scopesHandler{
 		clientSvc:   s,
 		scopesSvc:   scope,
@@ -39,7 +39,7 @@ var _ ScopesHanlder = (*scopesHandler)(nil)
 
 // scopesHandler is a concrete implementation of the ScopesHanlder interface
 type scopesHandler struct {
-	clientSvc   Service
+	clientSvc   ClientService
 	scopesSvc   scopes.Service
 	s2sVerifier jwt.Verifier
 	iamVerifier jwt.Verifier
