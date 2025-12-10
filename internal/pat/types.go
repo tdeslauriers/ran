@@ -85,20 +85,3 @@ type ScopePatRecord struct {
 	ScopeSlug        string `db:"scope_slug"`
 	ClientId         string `db:"client_uuid"`
 }
-
-// queries for client status checks
-const (
-	clientNotFoundQry       = `SELECT EXISTS(SELECT 1 FROM client WHERE slug = ?)`
-	clientDisabledQry       = `SELECT EXISTS(SELECT 1 FROM client WHERE slug = ? AND enabled = FALSE`
-	clientAccountExpiredQry = `SELECT EXISTS(SELECT 1 FROM client WHERE slug = ? AND account_expired = TRUE`
-	clientAccountLockedQry  = `SELECT EXISTS(SELECT 1 FROM client WHERE slug = ? AND account_locked = TRUE`
-)
-
-// queries for pat status checks
-const (
-	// check if none found because of issues with the pat
-	patNotFoundQry = `SELECT EXISTS(SELECT 1 FROM pat WHERE pat_index = ?)`
-	patInactiveQry = `SELECT EXISTS(SELECT 1 FROM pat WHERE pat_index = ? AND active = FALSE)`
-	patRevokedQry  = `SELECT EXISTS(SELECT 1 FROM pat WHERE pat_index = ? AND revoked = TRUE)`
-	patExpiredQry  = `SELECT EXISTS(SELECT 1 FROM pat WHERE pat_index = ? AND expired = TRUE)`
-)

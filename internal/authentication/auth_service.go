@@ -78,7 +78,7 @@ type s2sAuthService struct {
 func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) error {
 
 	// get record from the database if exists
-	c, err := s.sql.GetClientById(clientId)
+	c, err := s.sql.FindClientById(clientId)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) erro
 func (s *s2sAuthService) GetScopes(clientId, service string) ([]scopes.Scope, error) {
 
 	// get scopes from database
-	return s.sql.GetScopes(clientId, service)
+	return s.sql.FindScopes(clientId, service)
 }
 
 // MintToken builds and signs a jwt token for a given claims struct.

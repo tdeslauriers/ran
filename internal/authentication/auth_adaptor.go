@@ -16,11 +16,11 @@ type AuthRepository interface {
 	// RefreshExists checks if a refresh token exists in the database.
 	RefreshExists(index string) (bool, error)
 
-	// GetClientById retrieves a client by its id from database.
-	GetClientById(id string) (*clients.ClientRecord, error)
+	// FindClientById retrieves a client by its id from database.
+	FindClientById(id string) (*clients.ClientRecord, error)
 
-	// GetScopes retrieves the scopes associated with a client id and serivce name.
-	GetScopes(clientId string, service string) ([]scopes.Scope, error)
+	// FindScopes retrieves the scopes associated with a client id and serivce name.
+	FindScopes(clientId string, service string) ([]scopes.Scope, error)
 
 	// FindRefreshToken retrieves a refresh token record by its index.
 	FindRefreshToken(index string) (*types.S2sRefresh, error)
@@ -54,7 +54,7 @@ type authRepository struct {
 
 // RefreshExists checks if a refresh token exists in the database.
 func (r *authRepository) RefreshExists(index string) (bool, error) {
-	
+
 	qry := `SELECT EXISTS (SELECT 1 FROM refresh WHERE refresh_index = ?)`
 	exists, err := data.SelectExists(r.sql, qry, index)
 	if err != nil {
@@ -64,8 +64,8 @@ func (r *authRepository) RefreshExists(index string) (bool, error) {
 	return exists, nil
 }
 
-// GetClientById retrieves a client by its id from database.
-func (r *authRepository) GetClientById(id string) (*clients.ClientRecord, error) {
+// FindClientById retrieves a client by its id from database.
+func (r *authRepository) FindClientById(id string) (*clients.ClientRecord, error) {
 
 	qry := `
 		SELECT 
@@ -92,8 +92,8 @@ func (r *authRepository) GetClientById(id string) (*clients.ClientRecord, error)
 	return &c, nil
 }
 
-// GetScopes retrieves the scopes associated with a client id and serivce name.
-func (r *authRepository) GetScopes(clientId string, service string) ([]scopes.Scope, error) {
+// FindScopes retrieves the scopes associated with a client id and serivce name.
+func (r *authRepository) FindScopes(clientId string, service string) ([]scopes.Scope, error) {
 
 	qry := `
 		SELECT 
@@ -180,7 +180,6 @@ func (r *authRepository) UpdateRefreshToken(token types.S2sRefresh) error {
 
 	return nil
 }
-
 
 // DeleteRefreshById deletes a refresh token record by its db id
 func (r *authRepository) DeleteRefreshById(id string) error {

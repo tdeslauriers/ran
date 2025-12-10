@@ -13,7 +13,6 @@ import (
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/carapace/pkg/validate"
 	"github.com/tdeslauriers/ran/internal/definitions"
-	"github.com/tdeslauriers/ran/pkg/api/clients"
 )
 
 // Service is an interface for personal access token services
@@ -29,9 +28,9 @@ type Service interface {
 }
 
 // NewService creates a new personal access token (PAT) service interface abstracting a concrete implementation
-func NewService(sql data.SqlRepository, p exo.PatTokener) Service {
+func NewService(sql *sql.DB, p exo.PatTokener) Service {
 	return &service{
-		sql: sql,
+		sql: NewPatRepository(sql),
 		pat: p,
 
 		logger: slog.Default().
@@ -45,7 +44,7 @@ var _ Service = (*service)(nil)
 
 // service is a concrete implementation of the Service interface
 type service struct {
-	sql data.SqlRepository
+	sql PatRepository
 	pat exo.PatTokener
 
 	logger *slog.Logger
@@ -62,27 +61,22 @@ func (s *service) GeneratePat(slug string) (*Pat, error) {
 	}
 
 	// lookup the client uuid for xref record creation
-	qry := `
-		SELECT
-			uuid,
-			name,
-			owner,
-			created_at,
-			enabled,
-			account_expired,
-			account_locked,
-			slug
-		FROM client WHERE slug = ?
-			AND enabled = true
-			AND account_expired = false
-			AND account_locked = false`
-	var client clients.Client
-	if err := s.sql.SelectRecord(qry, &client, slug); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, s.handleClientLookupErr(slug)
-		} else {
-			return nil, fmt.Errorf("failed to retrieve client record for slug %s: %v", slug, err)
-		}
+	client, err := s.sql.FindClientBySlug(slug)
+	if err != nil {
+		return nil, err
+	}
+
+	// check that the client is enabled, not locked, and not expired
+	if !client.Enabled {
+		return nil, fmt.Errorf("client (slug '%s') is disabled", slug)
+	}
+
+	if client.AccountLocked {
+		return nil, fmt.Errorf("client (slug '%s') is locked", slug)
+	}
+
+	if client.AccountExpired {
+		return nil, fmt.Errorf("client (slug '%s') account has expired", slug)
 	}
 
 	// generate a new pat uuid
@@ -112,35 +106,23 @@ func (s *service) GeneratePat(slug string) (*Pat, error) {
 		Revoked:   false,
 		Expired:   false,
 	}
-	qry = `
-		INSERT INTO pat (
-			uuid,
-			pat_index,
-			created_at,
-			active,
-			revoked,
-			expired
-		) VALUES (?, ?, ?, ?, ?, ?)`
-	if err := s.sql.InsertRecord(qry, record); err != nil {
-		return nil, fmt.Errorf("failed to persist pat record: %v", err)
+
+	// insert the pat record into the database
+	if err := s.sql.InsertPat(record); err != nil {
+		return nil, fmt.Errorf("failed to persist pat record into database: %v", err)
 	}
 
-	// persist the xref record
+	// build xref record
 	xref := PatClientXref{
 		Id:        0, // autoincrement
 		PatID:     patId.String(),
 		ClientID:  client.Id,
 		CreatedAt: data.CustomTime{Time: time.Now().UTC()},
 	}
-	qry = `
-		INSERT INTO pat_client (
-			id,
-			pat_uuid,
-			client_uuid,
-			created_at
-		) VALUES (?, ?, ?, ?)`
-	if err := s.sql.InsertRecord(qry, xref); err != nil {
-		return nil, fmt.Errorf("failed to persist pat client xref record: %v", err)
+
+	// persist the xref record
+	if err := s.sql.InsertPatClientXref(xref); err != nil {
+		return nil, fmt.Errorf("failed to persist pat-client xref record: %v", err)
 	}
 
 	// return the pat model (with token)
@@ -152,49 +134,6 @@ func (s *service) GeneratePat(slug string) (*Pat, error) {
 		Revoked:   record.Revoked,
 		Expired:   record.Expired,
 	}, nil
-}
-
-// handleClientLookupErr is a helper method to determine why a client lookup failed by conducting a series of
-// 'exists queries' to determine if the client does not exist, is disabled, locked, or expired
-func (s *service) handleClientLookupErr(clientSlug string) error {
-
-	// check if client exists at all
-	found, err := s.sql.SelectExists(clientNotFoundQry, clientSlug)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve client record for slug %s: %v", clientSlug, err)
-	}
-	if !found {
-		return fmt.Errorf("client (slug '%s') not found", clientSlug)
-	}
-
-	// check if client exists but disabled
-	disabled, err := s.sql.SelectExists(clientDisabledQry, clientSlug)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve client record for slug %s: %v", clientSlug, err)
-	}
-	if disabled {
-		return fmt.Errorf("client (slug '%s') is disabled", clientSlug)
-	}
-
-	// check if client exists but locked
-	locked, err := s.sql.SelectExists(clientAccountLockedQry, clientSlug)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve client record for slug %s: %v", clientSlug, err)
-	}
-	if locked {
-		return fmt.Errorf("client (slug '%s') is locked", clientSlug)
-	}
-
-	// check if client exists but expired
-	expired, err := s.sql.SelectExists(clientAccountExpiredQry, clientSlug)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve client record for slug %s: %v", clientSlug, err)
-	}
-	if expired {
-		return fmt.Errorf("client (slug '%s') account has expired", clientSlug)
-	}
-
-	return fmt.Errorf("client (slug '%s') not found for unxepected/unhandled reason", clientSlug)
 }
 
 // IntrospectPat validates and introspects a given personal access token (PAT), and will
@@ -224,32 +163,8 @@ func (s *service) IntrospectPat(token string) (*exo.IntrospectResponse, error) {
 	// lookup the service and scopes from via via xref against the pat index
 	// Note: in this exact impl, the index look up serves as the hash comparison
 	// to validate the token, since the index is derived from a hash of the raw token
-	qry := `
-		SELECT
-			s.uuid AS scope_uuid,
-			s.service_name,
-			s.scope,
-			s.name AS scope_name,
-			s.description AS scope_description,
-			s.created_at AS scope_created_at,
-			s.active AS scope_active,
-			s.slug AS scope_slug,
-			c.uuid AS client_uuid
-		FROM scope s
-			LEFT OUTER JOIN client_scope cs ON s.uuid = cs.scope_uuid
-			LEFT OUTER JOIN client c ON cs.client_uuid = c.uuid
-			LEFT OUTER JOIN pat_client pc ON c.uuid = pc.client_uuid
-			LEFT OUTER JOIN pat p ON pc.pat_uuid = p.uuid
-		WHERE p.pat_index = ?
-			AND s.active = TRUE
-			AND c.enabled = TRUE
-			AND c.account_expired = FALSE
-			AND c.account_locked = FALSE
-			AND p.active = TRUE
-			AND p.revoked = FALSE
-			AND p.expired = FALSE`
-	var scopes []ScopePatRecord
-	if err := s.sql.SelectRecords(qry, &scopes, index); err != nil {
+	scopes, err := s.sql.FindPatScopes(index)
+	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve scopes for pat token from database: %v", err)
 	}
 
@@ -283,85 +198,70 @@ func (s *service) IntrospectPat(token string) (*exo.IntrospectResponse, error) {
 // revoked, expired, or if the associated client is disabled, locked, or expired.
 func (s *service) buildPatFailResponse(patIndex string) (*exo.IntrospectResponse, error) {
 
-	// Client status checks
-	// check if the client is disabled, locked, or expired
-	disabled, err := s.sql.SelectExists(clientDisabledQry, patIndex)
+	// check if pat exists, or is not active, revoked, or expired
+	// get pat record from db
+	pat, err := s.sql.FindPatByIndex(patIndex)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve client record for pat token: %v", err)
+		return &exo.IntrospectResponse{
+			Active: false,
+		}, err
 	}
-	if disabled {
+
+	// check if pat is inactive
+	if !pat.Active {
+		return &exo.IntrospectResponse{
+			Active: false,
+		}, fmt.Errorf("pat token is inactive")
+	}
+
+	// check if pat is revoked
+	if pat.Revoked {
+		return &exo.IntrospectResponse{
+			Active: false,
+		}, fmt.Errorf("pat token has been revoked")
+	}
+
+	// check if pat is expired
+	if pat.Expired {
+		return &exo.IntrospectResponse{
+			Active: false,
+		}, fmt.Errorf("pat token has expired")
+	}
+
+	// Client status checks
+	// get client from database if exists
+	clientStatus, err := s.sql.FindClientByPat(patIndex)
+	if err != nil {
+		return &exo.IntrospectResponse{
+			Active: false,
+		}, err
+	}
+
+	// check if the client is disabled, locked, or expired
+	// check if client is enabled
+	if !clientStatus.Enabled {
 		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("client associated with this pat token is disabled")
 	}
 
 	// check if the client is locked
-	locked, err := s.sql.SelectExists(clientAccountLockedQry, patIndex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve client record for pat token: %v", err)
-	}
-	if locked {
+
+	if clientStatus.AccountLocked {
 		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("client associated with this pat token is locked")
 	}
 
 	// check if the client is expired
-	clientExpired, err := s.sql.SelectExists(clientAccountExpiredQry, patIndex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve client record for pat token: %v", err)
-	}
-	if clientExpired {
+	if clientStatus.AccountExpired {
 		return &exo.IntrospectResponse{
 			Active: false,
 		}, fmt.Errorf("client associated with this pat token has expired")
 	}
 
-	// check if pat exists but inactive
-	inactive, err := s.sql.SelectExists(patInactiveQry, patIndex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve pat record for token: %v", err)
-	}
-	if inactive {
-		return &exo.IntrospectResponse{
-			Active: false,
-		}, fmt.Errorf("pat token is inactive")
-	}
-
-	// Pat status checks
-	// check if pat exists but revoked
-	revoked, err := s.sql.SelectExists(patRevokedQry, patIndex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve pat record for token: %v", err)
-	}
-	if revoked {
-		return &exo.IntrospectResponse{
-			Active: false,
-		}, fmt.Errorf("pat token has been revoked")
-	}
-
-	// check if pat exists but expired
-	patExpired, err := s.sql.SelectExists(patExpiredQry, patIndex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve pat record for token: %v", err)
-	}
-	if patExpired {
-		return &exo.IntrospectResponse{
-			Active: false,
-		}, fmt.Errorf("pat token has expired")
-	}
-
-	// check if pat exists
-	found, err := s.sql.SelectExists(patNotFoundQry, patIndex)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve pat record for token: %v", err)
-	}
-	if !found {
-		return &exo.IntrospectResponse{
-			Active: false,
-		}, fmt.Errorf("pat token not found")
-	}
-
+	// if none of the above conditions removed and error, then it is likely
+	// no scopes are associated with this pat token and client
 	return &exo.IntrospectResponse{
 		Active: false,
 	}, fmt.Errorf("no active scopes found for this pat token")

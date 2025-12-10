@@ -36,14 +36,14 @@ func (m *MockAuthRepository) RefreshExists(index string) (bool, error) {
 	return false, nil
 }
 
-func (m *MockAuthRepository) GetClientById(id string) (*clients.ClientRecord, error) {
+func (m *MockAuthRepository) FindClientById(id string) (*clients.ClientRecord, error) {
 	if m.GetClientByIdFunc != nil {
 		return m.GetClientByIdFunc(id)
 	}
 	return nil, nil
 }
 
-func (m *MockAuthRepository) GetScopes(clientId string, service string) ([]scopes.Scope, error) {
+func (m *MockAuthRepository) FindScopes(clientId string, service string) ([]scopes.Scope, error) {
 	if m.GetScopesFunc != nil {
 		return m.GetScopesFunc(clientId, service)
 	}
