@@ -6,18 +6,6 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/validate"
 )
 
-const (
-
-	// 400
-	ErrInvalidSlug string = "invalid slug"
-
-	//404
-	ErrScopeNotFound string = "scope not found"
-
-	//500
-	ErrGenSlugBlindIndex string = "failed to obtain blind index for slug"
-)
-
 // Scope is a model for the scope table data, NOT jwt string object in the jwt package.
 // Do not add fields from other contexts/concerns like csrf.
 type Scope struct {

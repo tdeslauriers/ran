@@ -5,7 +5,7 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/validate"
-	"github.com/tdeslauriers/ran/pkg/scopes"
+	"github.com/tdeslauriers/ran/pkg/api/scopes"
 )
 
 // Client is a model for a json object representing a service Client
@@ -75,4 +75,3 @@ func (c *ClientScopesCmd) ValidateCmd() error {
 
 	return nil
 }
-

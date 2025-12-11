@@ -10,8 +10,9 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/internal/scopes"
 	"github.com/tdeslauriers/ran/pkg/api/clients"
-	"github.com/tdeslauriers/ran/pkg/scopes"
+	api "github.com/tdeslauriers/ran/pkg/api/scopes"
 )
 
 // ScopesHanlder provides http handlers for service client requests to update assigned scopes
@@ -135,7 +136,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// scopes slice being empty indicates all scopes were removed, so still needs to be
 	// submitted to the client service to remove them all.
-	var updated []scopes.Scope
+	var updated []api.Scope
 	if len(cmd.ScopeSlugs) > 0 {
 		for _, slug := range cmd.ScopeSlugs {
 			var exists bool

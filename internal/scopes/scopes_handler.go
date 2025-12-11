@@ -11,6 +11,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/scopes"
 )
 
 // service endpoints require s2s-only endpoint scopes
@@ -266,7 +267,7 @@ func (h *handler) createScope(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get cmd from request body
-	var cmd Scope
+	var cmd scopes.Scope
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -416,7 +417,7 @@ func (h *handler) updateScope(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get cmd from request body
-	var cmd Scope
+	var cmd scopes.Scope
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -447,7 +448,7 @@ func (h *handler) updateScope(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// prepare updated scope
-	updated := &Scope{
+	updated := &scopes.Scope{
 		Uuid:        record.Uuid, // not allowed to update uuid
 		ServiceName: cmd.ServiceName,
 		Scope:       cmd.Scope,
@@ -523,10 +524,10 @@ func (h *handler) updateScope(w http.ResponseWriter, r *http.Request) {
 func (h *handler) HandleServiceError(w http.ResponseWriter, err error) {
 
 	switch {
-	case strings.Contains(err.Error(), ErrInvalidSlug):
+	case strings.Contains(err.Error(), "invalid slug"):
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusBadRequest,
-			Message:    ErrInvalidSlug,
+			Message:    "invalid slug",
 		}
 		e.SendJsonErr(w)
 		return
@@ -537,10 +538,10 @@ func (h *handler) HandleServiceError(w http.ResponseWriter, err error) {
 		}
 		e.SendJsonErr(w)
 		return
-	case strings.Contains(err.Error(), ErrScopeNotFound):
+	case strings.Contains(err.Error(), "scope not found"):
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusNotFound,
-			Message:    ErrScopeNotFound,
+			Message:    "scope not found",
 		}
 		e.SendJsonErr(w)
 		return
