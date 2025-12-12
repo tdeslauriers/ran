@@ -1,0 +1,168 @@
+package register
+
+import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+
+	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/jwt"
+	"github.com/tdeslauriers/ran/internal/clients"
+	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/register"
+)
+
+// RegistrationHandler provides an interface for handling client registration requests
+type RegistrationHandler interface {
+
+	// HandleRegistration handles a client registration request
+	HandleRegistration(w http.ResponseWriter, r *http.Request)
+}
+
+// NewRegistrationHandler creates a new client registration handler interface abstracting a concrete implementation
+func NewRegistrationHandler(
+	r RegistrationService,
+	c clients.ClientService,
+	s2s jwt.Verifier,
+	iam jwt.Verifier,
+) RegistrationHandler {
+
+	return &registrationHandler{
+		service:     r,
+		client:      c,
+		s2sVerifier: s2s,
+		iamVerifier: iam,
+
+		logger: slog.Default().
+			With(slog.String(definitions.PackageKey, definitions.PackageClients)).
+			With(slog.String(definitions.ComponentKey, definitions.ComponentRegister)),
+	}
+}
+
+var _ RegistrationHandler = (*registrationHandler)(nil)
+
+// registrationHandler is a concrete implementation of the RegistrationHandler interface
+type registrationHandler struct {
+	service     RegistrationService
+	client      clients.ClientService
+	s2sVerifier jwt.Verifier
+	iamVerifier jwt.Verifier
+
+	logger *slog.Logger
+}
+
+// HandleRegistration handles a client registration request
+func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.Request) {
+
+	// get telemetry from request
+	tel := connect.ObtainTelemetry(r, h.logger)
+	log := h.logger.With(tel.TelemetryFields()...)
+
+	// validate request is a POST
+	if r.Method != http.MethodPost {
+		log.Error("invalid request method", "err", "only POST method is allowed")
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "only post requests are allowed",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate s2s token
+	svcToken := r.Header.Get("Service-Authorization")
+	// NOTE: the s2s scopes needed are the ones for a service calling a user endpoint.
+	if _, err := h.s2sVerifier.BuildAuthorized(clients.UserAllowedWrite, svcToken); err != nil {
+		log.Error("failed to validate s2s token", "err", err.Error())
+		connect.RespondAuthFailure(connect.S2s, err, w)
+		return
+	}
+
+	// validate user access token
+	usrToken := r.Header.Get("Authorization")
+	authroized, err := h.iamVerifier.BuildAuthorized(clients.UserAllowedWrite, usrToken)
+	if err != nil {
+		log.Error("failed to validate user access token", "err", err.Error())
+		connect.RespondAuthFailure(connect.User, err, w)
+		return
+	}
+
+	// decode request body
+	var cmd register.RegisterCmd
+	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+		log.Error("failed to decode registration cmd request body", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    "failed to json decode registration cmd request body",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// validate registration cmd
+	if err := cmd.ValidateCmd(); err != nil {
+		log.Error("failed to validate registration cmd", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusBadRequest,
+			Message:    err.Error(),
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// get all current all (to make sure not already registered or duplicate)
+	all, err := h.client.GetClients()
+	if err != nil {
+		log.Error("failed to get clients from persistance", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "internal server error",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	// check for duplicate client
+	for _, client := range all {
+		if cmd.Name == client.Name {
+			log.Error(fmt.Sprintf("client name %s already exists", cmd.Name))
+			e := connect.ErrorHttp{
+				StatusCode: http.StatusConflict,
+				Message:    fmt.Sprintf("client name %s already exists", cmd.Name),
+			}
+			e.SendJsonErr(w)
+			return
+		}
+	}
+
+	// register client
+	client, err := h.service.Register(&cmd)
+	if err != nil {
+		log.Error("failed to register client", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    fmt.Sprintf("failed to register client %s", cmd.Name),
+		}
+		e.SendJsonErr(w)
+		return
+	}
+
+	h.logger.Info(fmt.Sprintf("client %s registered successfully", client.Name),
+		slog.String("actor", authroized.Claims.Subject),
+		slog.String("client_id", client.Id))
+
+	// respond with client
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	if err := json.NewEncoder(w).Encode(client); err != nil {
+		log.Error("failed to encode registered client json response", "err", err.Error())
+		e := connect.ErrorHttp{
+			StatusCode: http.StatusInternalServerError,
+			Message:    "failed to encode registered client json response",
+		}
+		e.SendJsonErr(w)
+		return
+	}
+}
