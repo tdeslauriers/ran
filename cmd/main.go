@@ -7,7 +7,7 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/config"
 	"github.com/tdeslauriers/ran/internal/definitions"
-	"github.com/tdeslauriers/ran/pkg/s2s"
+	"github.com/tdeslauriers/ran/internal/s2s"
 )
 
 func main() {
