@@ -2,6 +2,7 @@ package s2s
 
 import (
 	"crypto/tls"
+	"database/sql"
 	"encoding/base64"
 	"fmt"
 	"log/slog"
@@ -16,11 +17,13 @@ import (
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/carapace/pkg/schedule"
 	"github.com/tdeslauriers/carapace/pkg/sign"
+	"github.com/tdeslauriers/ran/internal/authentication"
 	"github.com/tdeslauriers/ran/internal/clients"
 	"github.com/tdeslauriers/ran/internal/definitions"
-	"github.com/tdeslauriers/ran/pkg/authentication"
-	"github.com/tdeslauriers/ran/pkg/pat"
-	"github.com/tdeslauriers/ran/pkg/scopes"
+	"github.com/tdeslauriers/ran/internal/pat"
+	"github.com/tdeslauriers/ran/internal/register"
+	"github.com/tdeslauriers/ran/internal/reset"
+	"github.com/tdeslauriers/ran/internal/scopes"
 )
 
 type S2s interface {
@@ -69,7 +72,7 @@ func New(config config.Config) (S2s, error) {
 		return nil, fmt.Errorf("failed to connect to database: %v", err)
 	}
 
-	repository := data.NewSqlRepository(db)
+	
 
 	// indexer
 	dbHmacSecret, err := base64.StdEncoding.DecodeString(config.Database.IndexSecret)
@@ -124,17 +127,19 @@ func New(config config.Config) (S2s, error) {
 	credSvc := authentication.NewCredService(credHmacSecret)
 
 	return &s2s{
-		config:         config,
-		serverTls:      serverTlsConfig,
-		repository:     repository,
-		s2sVerifier:    jwt.NewVerifier(config.ServiceName, &s2sPrivateKey.PublicKey),
-		iamVerifier:    jwt.NewVerifier(config.ServiceName, iamPublicKey),
-		authService:    authentication.NewS2sAuthService(repository, s2sSigner, dbIndexer, cryptor, credSvc),
-		credService:    credSvc,
-		patTokener:     pat.NewService(repository, tokener),
-		scopesService:  scopes.NewSerivce(repository),
-		clientsService: clients.NewService(db, credSvc),
-		cleanup:        schedule.NewCleanup(repository),
+		config:          config,
+		serverTls:       serverTlsConfig,
+		repository:      db,
+		s2sVerifier:     jwt.NewVerifier(config.ServiceName, &s2sPrivateKey.PublicKey),
+		iamVerifier:     jwt.NewVerifier(config.ServiceName, iamPublicKey),
+		authService:     authentication.NewS2sAuthService(db, s2sSigner, dbIndexer, cryptor, credSvc),
+		credService:     credSvc,
+		patTokener:      pat.NewService(db, tokener),
+		scopesService:   scopes.NewSerivce(db),
+		registerService: register.NewRegistrationService(db, credSvc),
+		clientsService:  clients.NewClientService(db),
+		resetService:    reset.NewResetService(db, credSvc),
+		cleanup:         schedule.NewCleanup(db),
 
 		logger: slog.Default().With(slog.String(definitions.ComponentKey, definitions.ComponentS2s)),
 	}, nil
@@ -144,22 +149,24 @@ func New(config config.Config) (S2s, error) {
 var _ S2s = (*s2s)(nil)
 
 type s2s struct {
-	config         config.Config
-	serverTls      *tls.Config
-	repository     data.SqlRepository
-	s2sVerifier    jwt.Verifier
-	iamVerifier    jwt.Verifier
-	authService    authentication.S2sAuthService
-	credService    authentication.CredService
-	patTokener     pat.Service
-	scopesService  scopes.Service
-	clientsService clients.Service
-	cleanup        schedule.Cleanup
+	config          config.Config
+	serverTls       *tls.Config
+	repository      *sql.DB
+	s2sVerifier     jwt.Verifier
+	iamVerifier     jwt.Verifier
+	authService     authentication.S2sAuthService
+	credService     authentication.CredService
+	patTokener      pat.Service
+	scopesService   scopes.Service
+	registerService register.RegistrationService
+	clientsService  clients.ClientService
+	resetService    reset.ResetService
+	cleanup         schedule.Cleanup
 
 	logger *slog.Logger
 }
 
-func (s s2s) CloseDb() error {
+func (s *s2s) CloseDb() error {
 	if err := s.repository.Close(); err != nil {
 		return err
 	}
@@ -186,11 +193,21 @@ func (s *s2s) Run() error {
 	iamScopesHandler := scopes.NewHandler(s.scopesService, s.s2sVerifier, s.iamVerifier)
 	mux.HandleFunc("/scopes/{slug...}", iamScopesHandler.HandleScopes)
 
-	clientHanlder := clients.NewHandler(s.clientsService, s.scopesService, s.s2sVerifier, s.iamVerifier)
+	// client registration endpoint
+	registerHandler := register.NewRegistrationHandler(s.registerService, s.clientsService, s.s2sVerifier, s.iamVerifier)
+	mux.HandleFunc("/clients/register", registerHandler.HandleRegistration)
+
+	// client endpoint
+	clientHanlder := clients.NewClientHandler(s.clientsService, s.s2sVerifier, s.iamVerifier)
 	mux.HandleFunc("/clients/{slug...}", clientHanlder.HandleClients)
-	mux.HandleFunc("/clients/register", clientHanlder.HandleRegistration)
-	mux.HandleFunc("/clients/reset", clientHanlder.HandleReset)
-	mux.HandleFunc("/clients/scopes", clientHanlder.HandleScopes)
+
+	// client scopes endpoint
+	clientScopesHandler := clients.NewScopesHandler(s.clientsService, s.scopesService, s.s2sVerifier, s.iamVerifier)
+	mux.HandleFunc("/clients/scopes", clientScopesHandler.HandleScopes)
+
+	// client pw reset endpoint
+	resetHandler := reset.NewResetHandler(s.resetService, s.s2sVerifier, s.iamVerifier)
+	mux.HandleFunc("/clients/reset", resetHandler.HandleReset)
 
 	// pat token endpoints
 	patHandler := pat.NewHandler(s.patTokener, s.s2sVerifier, s.iamVerifier)
