@@ -9,8 +9,9 @@ import (
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
-	"github.com/tdeslauriers/carapace/pkg/pat"
+	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/pat"
 )
 
 // authorization scopes required
@@ -94,7 +95,7 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// decode request body
-	var cmd GeneratePatCmd
+	var cmd pat.GeneratePatCmd
 	if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{
@@ -117,18 +118,18 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// generate the PAT
-	pat, err := h.service.GeneratePat(cmd.Slug)
+	p, err := h.service.GeneratePat(cmd.Slug)
 	if err != nil {
 		log.Error("failed to generate pat token", "err", err.Error())
 		h.respondServiceError(err, w)
 		return
 	}
 
-	log.Info(fmt.Sprintf("pat token generated for client '%s' by user '%s'", pat.Client, authorized.Claims.Subject))
+	log.Info(fmt.Sprintf("pat token generated for client '%s' by user '%s'", p.Client, authorized.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(pat); err != nil {
+	if err := json.NewEncoder(w).Encode(p); err != nil {
 		log.Error("failed to encode pat json response", "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusInternalServerError,
@@ -168,7 +169,7 @@ func (h *handler) HandleIntrospectPat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// decode request body
-	var token pat.IntrospectCmd
+	var token exo.IntrospectCmd
 	if err := json.NewDecoder(r.Body).Decode(&token); err != nil {
 		log.Error("failed to decode request body", "err", err.Error())
 		e := connect.ErrorHttp{

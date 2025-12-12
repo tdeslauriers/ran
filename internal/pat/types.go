@@ -1,10 +1,7 @@
 package pat
 
 import (
-	"fmt"
-
 	"github.com/tdeslauriers/carapace/pkg/data"
-	"github.com/tdeslauriers/carapace/pkg/validate"
 )
 
 // PatRecord represents a personal access token (PAT) record in the database
@@ -24,42 +21,6 @@ type PatClientXref struct {
 	PatID     string          `db:"pat_uuid"`
 	ClientID  string          `db:"client_uuid"`
 	CreatedAt data.CustomTime `db:"created_at"`
-}
-
-// GeneratePatCmd represents the command to generate a personal access token (PAT)
-type GeneratePatCmd struct {
-	Csrf string `json:"csrf,omitempty"` // csrf may not be present in some cases
-	Slug string `json:"slug,omitempty"`
-}
-
-// Validate validates the GeneratePatCmd fields
-func (cmd *GeneratePatCmd) Validate() error {
-
-	// validate csrf token if present
-	if cmd.Csrf != "" {
-		if len(cmd.Csrf) < 16 || len(cmd.Csrf) > 64 {
-			return fmt.Errorf("csrf token must be between 16 and 128 characters")
-		}
-
-		if !validate.IsValidUuid(cmd.Csrf) {
-			return fmt.Errorf("csrf token must be a valid uuid")
-		}
-	}
-
-	// validate slug --> must be present and between 3 and 64 characters
-	if cmd.Slug == "" {
-		return fmt.Errorf("slug is required")
-	}
-
-	if len(cmd.Slug) < 16 || len(cmd.Slug) > 64 {
-		return fmt.Errorf("slug must be between 16 and 64 characters")
-	}
-
-	if !validate.IsValidUuid(cmd.Slug) {
-		return fmt.Errorf("slug must be well formed uuid")
-	}
-
-	return nil
 }
 
 // ScopePatRecord represents a query row scope + client id associated with a personal access token (PAT)
