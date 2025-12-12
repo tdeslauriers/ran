@@ -13,13 +13,14 @@ import (
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/carapace/pkg/validate"
 	"github.com/tdeslauriers/ran/internal/definitions"
+	"github.com/tdeslauriers/ran/pkg/api/pat"
 )
 
 // Service is an interface for personal access token services
 type Service interface {
 
 	// GeneratePat generates a new personal access token (PAT) for a given client slug
-	GeneratePat(slug string) (*Pat, error)
+	GeneratePat(slug string) (*pat.Pat, error)
 
 	// IntrospectPat validates and introspects a given personal access token (PAT), and will
 	// return the associated pat scopes if it it is valid, active, not revoked, and not expired.
@@ -52,7 +53,7 @@ type service struct {
 
 // GeneratePat is the concrete implentation of the Service interface method which
 // generates a new personal access token (PAT) for a given client slug
-func (s *service) GeneratePat(slug string) (*Pat, error) {
+func (s *service) GeneratePat(slug string) (*pat.Pat, error) {
 
 	// validate the slug is a valid uuid
 	// redundant validation, but good practice
@@ -126,7 +127,7 @@ func (s *service) GeneratePat(slug string) (*Pat, error) {
 	}
 
 	// return the pat model (with token)
-	return &Pat{
+	return &pat.Pat{
 		Client:    client.Name,
 		Token:     token,
 		CreatedAt: record.CreatedAt.Format(time.RFC3339),

@@ -9,6 +9,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/data"
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/ran/internal/clients"
+	"github.com/tdeslauriers/ran/pkg/api/pat"
 )
 
 // Mock implementation of PatRepository
@@ -106,7 +107,7 @@ func TestGeneratePat(t *testing.T) {
 		setupMocks     func() (*mockPatRepository, *mockPatTokener)
 		expectError    bool
 		errorContains  string
-		validateResult func(t *testing.T, result *Pat)
+		validateResult func(t *testing.T, result *pat.Pat)
 	}{
 		{
 			name: "success",
@@ -149,7 +150,7 @@ func TestGeneratePat(t *testing.T) {
 				return repo, tokener
 			},
 			expectError: false,
-			validateResult: func(t *testing.T, result *Pat) {
+			validateResult: func(t *testing.T, result *pat.Pat) {
 				if result.Client != testClientName {
 					t.Errorf("expected client name %s, got %s", testClientName, result.Client)
 				}
@@ -404,7 +405,7 @@ func TestGeneratePat(t *testing.T) {
 
 // contains is a helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(substr) > 0 && len(s) >= len(substr) && 
+	return len(substr) > 0 && len(s) >= len(substr) &&
 		(s == substr || len(s) > len(substr) && containsSubstring(s, substr))
 }
 

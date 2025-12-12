@@ -26,16 +26,6 @@ type PatClientXref struct {
 	CreatedAt data.CustomTime `db:"created_at"`
 }
 
-// Pat is the output model representing a personal access token (PAT) --> it is never stored.
-type Pat struct {
-	Client    string `json:"client,omitempty"` // client name: convenience field
-	Token     string `json:"token,omitempty"`  // the actual token is only returned once, upon creation
-	CreatedAt string `json:"created_at"`
-	Active    bool   `json:"active"`
-	Revoked   bool   `json:"revoked"`
-	Expired   bool   `json:"expired"`
-}
-
 // GeneratePatCmd represents the command to generate a personal access token (PAT)
 type GeneratePatCmd struct {
 	Csrf string `json:"csrf,omitempty"` // csrf may not be present in some cases
