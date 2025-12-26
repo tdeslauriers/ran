@@ -72,8 +72,6 @@ func New(config config.Config) (S2s, error) {
 		return nil, fmt.Errorf("failed to connect to database: %v", err)
 	}
 
-	
-
 	// indexer
 	dbHmacSecret, err := base64.StdEncoding.DecodeString(config.Database.IndexSecret)
 	if err != nil {
