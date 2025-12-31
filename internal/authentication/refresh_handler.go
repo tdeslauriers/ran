@@ -192,14 +192,47 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			log.Info(fmt.Sprintf("deleted claimed refresh token record uuid %s", refresh.Uuid))
 		}(refresh.RefreshToken)
 
+		// create a new refresh token to return with new access token to
+		// replace the one just claimed by the requesting service.
+		replace, err := uuid.NewRandom()
+		if err != nil {
+			// log only, refresh token is a convenience
+			log.Error("unable to create refresh token uuid", "err", err.Error())
+
+		}
+
+		// build and persist new refresh, but do not wait to return response
+		go func(r string) {
+			if r != "" {
+				if err := h.authService.PersistRefresh(types.S2sRefresh{
+					// primary key uuid created by PersistRefresh
+					// index created by PersistRefresh
+					ServiceName:  cmd.ServiceName,
+					RefreshToken: r,
+					ClientId:     refresh.ClientId, // from the claimed refresh model object
+					CreatedAt: data.CustomTime{
+						Time: time.Unix(token.Claims.IssuedAt, 0),
+					}, // need to preserve the original issued at time for expiry calculations
+					Revoked: false,
+				}); err != nil {
+					// only logging err since refresh is a convenience
+					log.Error(fmt.Sprintf("failed to persist replacement s2s refresh token for client id %s", refresh.ClientId), "err", err.Error())
+				}
+			}
+		}(replace.String())
+
 		// respond with authorization data
 		authz := &provider.S2sAuthorization{
-			Jti:            token.Claims.Jti,
-			ServiceName:    cmd.ServiceName,
-			ServiceToken:   token.Token,
-			TokenExpires:   data.CustomTime{Time: time.Unix(token.Claims.Expires, 0)},
-			RefreshToken:   refresh.RefreshToken,
-			RefreshExpires: data.CustomTime{Time: refresh.CreatedAt.Add(RefreshDuration * time.Minute)}, //  same expiry
+			Jti:          token.Claims.Jti,
+			ServiceName:  cmd.ServiceName,
+			ServiceToken: token.Token,
+			TokenExpires: data.CustomTime{
+				Time: time.Unix(token.Claims.Expires, 0),
+			},
+			RefreshToken: replace.String(), // if "", will error downstream which is fine because convenience only
+			RefreshExpires: data.CustomTime{
+				Time: refresh.CreatedAt.Add(RefreshDuration * time.Minute),
+			}, //  same expiry
 		}
 
 		log.Info(fmt.Sprintf("successfully refreshed and minted new s2s token for client id %s", refresh.ClientId))
