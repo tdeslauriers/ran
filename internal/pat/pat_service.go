@@ -57,7 +57,7 @@ func (s *service) GeneratePat(slug string) (*pat.Pat, error) {
 
 	// validate the slug is a valid uuid
 	// redundant validation, but good practice
-	if !validate.IsValidUuid(slug) {
+	if err := validate.ValidateUuid(slug); err != nil {
 		return nil, fmt.Errorf("invalid client slug format")
 	}
 

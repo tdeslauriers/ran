@@ -22,23 +22,27 @@ type S2sRegisterCmd struct {
 
 func (cmd *S2sRegisterCmd) ValidateCmd() error {
 
-	if cmd.Uuid != "" && !validate.IsValidUuid(cmd.Uuid) {
-		return fmt.Errorf("invalid or not well formatted client id")
+	if cmd.Uuid != "" {
+		if err := validate.ValidateUuid(cmd.Uuid); err != nil {
+			return fmt.Errorf("invalid or not well formatted client id")
+		}
 	}
 
-	if valid, err := validate.IsValidServiceName(cmd.Name); !valid {
+	if err := validate.ValidateServiceName(cmd.Name); err != nil {
 		return fmt.Errorf("invalid client name: %v", err)
 	}
 
-	if err := validate.IsValidName(cmd.Owner); err != nil {
+	if err := validate.ValidateName(cmd.Owner); err != nil {
 		return fmt.Errorf("invalid client owner: %v", err)
 	}
 
-	if cmd.Slug != "" && !validate.IsValidUuid(cmd.Slug) {
-		return fmt.Errorf("invalid or not well formatted client slug")
+	if cmd.Slug != "" {
+		if err := validate.ValidateUuid(cmd.Slug); err != nil {
+			return fmt.Errorf("invalid or not well formatted client slug")
+		}
 	}
 
-	if err := validate.IsValidPassword(cmd.Password); err != nil {
+	if err := validate.ValidatePassword(cmd.Password); err != nil {
 		return fmt.Errorf("invalid client password: %v", err)
 	}
 

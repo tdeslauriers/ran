@@ -31,7 +31,7 @@ func (cmd *GeneratePatCmd) Validate() error {
 			return fmt.Errorf("csrf token must be between 16 and 128 characters")
 		}
 
-		if !validate.IsValidUuid(cmd.Csrf) {
+		if err := validate.ValidateUuid(cmd.Csrf); err != nil {
 			return fmt.Errorf("csrf token must be a valid uuid")
 		}
 	}
@@ -45,7 +45,7 @@ func (cmd *GeneratePatCmd) Validate() error {
 		return fmt.Errorf("slug must be between 16 and 64 characters")
 	}
 
-	if !validate.IsValidUuid(cmd.Slug) {
+	if err := validate.ValidateUuid(cmd.Slug); err != nil {
 		return fmt.Errorf("slug must be well formed uuid")
 	}
 

@@ -26,20 +26,22 @@ func (s *Scope) ValidateCmd() error {
 	// additional checks are performed by services, so if uuid values are removed, it is not a problem.
 
 	if s.Uuid != "" {
-		if !validate.IsValidUuid(s.Uuid) {
+		if err := validate.ValidateUuid(s.Uuid); err != nil {
 			return fmt.Errorf("invalid scope id in scope payload")
 		}
 	}
 
-	if ok, err := validate.IsValidServiceName(s.ServiceName); !ok {
+	if err := validate.ValidateServiceName(s.ServiceName); err != nil {
 		return fmt.Errorf("invalid service name in scope payload: %v", err)
 	}
 
-	if ok, err := validate.IsValidScope(s.Scope); !ok {
+	// Replace IsValidScope with an appropriate validation function or implement it in the validate package.
+	if err := validate.ValidateScope(s.Scope); err != nil {
 		return fmt.Errorf("invalid scope in scope payload: %v", err)
 	}
 
-	if ok, err := validate.IsValidScopeName(s.Name); !ok {
+	// Example: Use ValidateName if it exists, or implement your own logic here.
+	if err := validate.ValidateName(s.Name); err != nil {
 		return fmt.Errorf("invalid scope name in scope payload: %v", err)
 	}
 
@@ -48,7 +50,7 @@ func (s *Scope) ValidateCmd() error {
 	}
 
 	if s.Slug != "" {
-		if !validate.IsValidUuid(s.Slug) {
+		if err := validate.ValidateUuid(s.Slug); err != nil {
 			return fmt.Errorf("invalid slug in scope payload")
 		}
 	}

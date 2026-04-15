@@ -67,7 +67,7 @@ func (s *service) GetScope(slug string) (*scopes.Scope, error) {
 
 	// validate slug is well formed uuid
 	// redundant check (should be checked in handler), but good pratice
-	if !validate.IsValidUuid(slug) {
+	if err := validate.ValidateUuid(slug); err != nil {
 		return nil, errors.New("invalid slug")
 	}
 

@@ -24,15 +24,17 @@ type Client struct {
 // Validate performs input validation check on client fields.
 func (c *Client) Validate() error {
 
-	if c.Id != "" && !validate.IsValidUuid(c.Id) {
-		return fmt.Errorf("invalid or not well formatted servcice client id")
+	if c.Id != "" {
+		if err := validate.ValidateUuid(c.Id); err != nil {
+			return fmt.Errorf("invalid or not well formatted servcice client id")
+		}
 	}
 
-	if valid, err := validate.IsValidServiceName(c.Name); !valid {
+	if err := validate.ValidateServiceName(c.Name); err != nil {
 		return fmt.Errorf("invalid service client name: %v", err)
 	}
 
-	if err := validate.IsValidName(c.Owner); err != nil {
+	if err := validate.ValidateName(c.Owner); err != nil {
 		return fmt.Errorf("invalid service client owner: %v", err)
 	}
 
@@ -45,8 +47,10 @@ func (c *Client) Validate() error {
 
 	// AccountLocked is a boolean, no validation needed
 
-	if c.Slug != "" && !validate.IsValidUuid(c.Slug) {
-		return fmt.Errorf("invalid or not well formatted service client slug")
+	if c.Slug != "" {
+		if err := validate.ValidateUuid(c.Slug); err != nil {
+			return fmt.Errorf("invalid or not well formatted service client slug")
+		}
 	}
 
 	return nil
@@ -61,13 +65,13 @@ type ClientScopesCmd struct {
 // ValidateCmd performs input validation check on client scopes fields.
 func (c *ClientScopesCmd) ValidateCmd() error {
 
-	if !validate.IsValidUuid(c.ClientSlug) {
+	if err := validate.ValidateUuid(c.ClientSlug); err != nil {
 		return fmt.Errorf("invalid client slug")
 	}
 
 	if len(c.ScopeSlugs) > 0 {
 		for _, slug := range c.ScopeSlugs {
-			if !validate.IsValidUuid(slug) {
+			if err := validate.ValidateUuid(slug); err != nil {
 				return fmt.Errorf("invalid scope slug submitted: all slugs must be valid uuids")
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -127,6 +128,16 @@ func (m *MockIndexer) ObtainBlindIndex(s string) (string, error) {
 type MockCryptor struct {
 	EncryptServiceDataFunc func([]byte) (string, error)
 	DecryptServiceDataFunc func(string) ([]byte, error)
+}
+
+// DecryptField implements [data.Cryptor].
+func (m *MockCryptor) DecryptField(fieldname string, ciphertext string, plaintextCh chan string, errCh chan error, wg *sync.WaitGroup) {
+	panic("unimplemented")
+}
+
+// EncryptField implements [data.Cryptor].
+func (m *MockCryptor) EncryptField(fieldname string, plaintext string, ciphertextCh chan string, errCh chan error, wg *sync.WaitGroup) {
+	panic("unimplemented")
 }
 
 var _ data.Cryptor = (*MockCryptor)(nil)

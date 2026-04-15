@@ -65,7 +65,7 @@ func (s *clientService) GetClient(slug string) (*clients.Client, error) {
 		return nil, errors.New("service client slug is required")
 	}
 
-	if !validate.IsValidUuid(slug) {
+	if err := validate.ValidateUuid(slug); err != nil {
 		return nil, errors.New("invalid or not well formatted service client slug")
 	}
 
