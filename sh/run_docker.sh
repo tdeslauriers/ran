@@ -9,25 +9,27 @@ docker build --pull --no-cache -t "${IMAGE_NAME}" .
 
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 
-docker run -d --rm --name "${CONTAINER_NAME}" -p $(op read "op://world_site/ran_service_container_dev/port"):$(op read "op://world_site/ran_service_container_dev/port") \
-    -e RAN_SERVICE_CLIENT_ID=$(op read "op://world_site/ran_service_container_dev/client_id") \
-    -e RAN_SERVICE_PORT=":$(op read "op://world_site/ran_service_container_dev/port")" \
-    -e RAN_CA_CERT="$(op document get "service_ca_dev_cert" --vault world_site | base64 -w 0)" \
-    -e RAN_SERVER_CERT="$(op document get "ran_service_server_dev_cert" --vault world_site | base64 -w 0)" \
-    -e RAN_SERVER_KEY="$(op document get "ran_service_server_dev_key" --vault world_site | base64 -w 0)" \
-    -e RAN_DB_CA_CERT="$(op document get "db_ca_dev_cert" --vault world_site | base64 -w 0)" \
-    -e RAN_DB_CLIENT_CERT="$(op document get "ran_db_client_dev_cert" --vault world_site | base64 -w 0)" \
-    -e RAN_DB_CLIENT_KEY="$(op document get "ran_db_client_dev_key" --vault world_site | base64 -w 0)" \
-    -e RAN_DATABASE_URL="$(op read "op://world_site/ran_db_dev/server"):$(op read "op://world_site/ran_db_dev/port")" \
-    -e RAN_DATABASE_NAME="$(op read "op://world_site/ran_db_dev/database")" \
-    -e RAN_DATABASE_USERNAME="$(op read "op://world_site/ran_db_dev/username")" \
-    -e RAN_DATABASE_PASSWORD="$(op read "op://world_site/ran_db_dev/password")" \
-    -e RAN_DATABASE_HMAC_INDEX_SECRET="$(op read "op://world_site/ran_hmac_index_secret_dev/secret")" \
-    -e RAN_FIELD_LEVEL_AES_GCM_SECRET="$(op read "op://world_site/ran_aes_gcm_secret_dev/secret")" \
-    -e RAN_PAT_PEPPER="$(op read "op://world_site/ran_pat_pepper_secret_dev/secret")" \
-    -e RAN_S2S_JWT_SIGNING_KEY="$(op read "op://world_site/ran_jwt_key_pair_dev/signing_key")" \
-    -e RAN_S2S_JWT_VERIFYING_KEY="$(op read "op://world_site/ran_jwt_key_pair_dev/verifying_key")" \
-    -e RAN_USER_JWT_VERIFYING_KEY="$(op read "op://world_site/shaw_jwt_key_pair_dev/verifying_key")" \
-    -e RAN_HMAC_S2S_AUTH_SECRET="$(op read "op://world_site/ran_hmac_auth_secret_dev/secret")" \
+docker run -d --rm \
+    --name "${CONTAINER_NAME}" \
+    -p "${RAN_SERVICE_PORT: -4}":"${RAN_SERVICE_PORT: -4}" \
+    -e RAN_SERVICE_CLIENT_ID \
+    -e RAN_SERVICE_PORT \
+    -e RAN_CA_CERT \
+    -e RAN_SERVER_CERT \
+    -e RAN_SERVER_KEY \
+    -e RAN_DB_CA_CERT \
+    -e RAN_DB_CLIENT_CERT \
+    -e RAN_DB_CLIENT_KEY \
+    -e RAN_DATABASE_URL \
+    -e RAN_DATABASE_PORT \
+    -e RAN_DATABASE_NAME \
+    -e RAN_DATABASE_USERNAME \
+    -e RAN_DATABASE_PASSWORD \
+    -e RAN_DATABASE_HMAC_INDEX_SECRET \
+    -e RAN_FIELD_LEVEL_AES_GCM_SECRET \
+    -e RAN_PAT_PEPPER \
+    -e RAN_S2S_JWT_SIGNING_KEY \
+    -e RAN_S2S_JWT_VERIFYING_KEY \
+    -e RAN_USER_JWT_VERIFYING_KEY \
+    -e RAN_HMAC_S2S_AUTH_SECRET \
     "${IMAGE_NAME}"
-
