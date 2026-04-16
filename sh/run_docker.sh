@@ -1,6 +1,6 @@
 #!/bin/bash
 
-docker build -t ran .
+set -euo pipefail
 
 IMAGE_NAME="ran:latest"
 CONTAINER_NAME="ran-dev"
