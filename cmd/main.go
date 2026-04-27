@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/tdeslauriers/carapace/pkg/config"
 	"github.com/tdeslauriers/ran/internal/definitions"
@@ -59,10 +62,13 @@ func main() {
 
 	defer s2s.CloseDb()
 
-	if err := s2s.Run(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	if err := s2s.Run(ctx); err != nil {
 		logger.Error(fmt.Sprintf("failed to run %s s2s service", definitions.ServiceS2s), "err", err.Error())
 		os.Exit(1)
 	}
 
-	select {}
+	<-ctx.Done()
 }

@@ -99,7 +99,7 @@ func (m *MockSigner) Mint(token *jwt.Token) error {
 	}
 	// Default behavior: set signature and token string
 	token.Signature = []byte("mock-signature")
-	token.Token = token.BaseString + ".mock-signature"
+	token.Raw = token.BaseString + ".mock-signature"
 	return nil
 }
 
@@ -563,7 +563,7 @@ func TestMintToken(t *testing.T) {
 				return &MockSigner{
 					MintFunc: func(token *jwt.Token) error {
 						token.Signature = []byte("test-signature")
-						token.Token = token.BaseString + ".dGVzdC1zaWduYXR1cmU"
+						token.Raw = token.BaseString + ".dGVzdC1zaWduYXR1cmU"
 						return nil
 					},
 				}
@@ -583,7 +583,7 @@ func TestMintToken(t *testing.T) {
 				if len(token.Signature) == 0 {
 					t.Error("expected signature but got empty")
 				}
-				if len(token.Token) == 0 {
+				if len(token.Raw) == 0 {
 					t.Error("expected token string but got empty")
 				}
 			},

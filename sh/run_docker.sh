@@ -4,8 +4,10 @@ set -euo pipefail
 
 IMAGE_NAME="ran:latest"
 CONTAINER_NAME="ran-dev"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-docker build --pull --no-cache -t "${IMAGE_NAME}" .
+docker build --pull --no-cache -f "${REPO_ROOT}/Dockerfile" -t "${IMAGE_NAME}" "${REPO_ROOT}"
 
 docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 

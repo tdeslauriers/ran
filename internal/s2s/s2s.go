@@ -1,6 +1,7 @@
 package s2s
 
 import (
+	"context"
 	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
@@ -27,7 +28,7 @@ import (
 )
 
 type S2s interface {
-	Run() error
+	Run(ctx context.Context) error
 	CloseDb() error
 }
 
@@ -171,7 +172,7 @@ func (s *s2s) CloseDb() error {
 	return nil
 }
 
-func (s *s2s) Run() error {
+func (s *s2s) Run(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", diagnostics.HealthCheckHandler)
@@ -226,7 +227,7 @@ func (s *s2s) Run() error {
 		}
 	}()
 
-	s.cleanup.ExpiredRefresh(3) // 2am +- 30; refresh tokens live 3 hours
+	s.cleanup.ExpiredRefresh(ctx, 3) // 2am +- 30; refresh tokens live 3 hours
 
 	return nil
 }

@@ -163,7 +163,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 			Jti:       jti.String(),
 			Issuer:    definitions.SericeName,
 			Subject:   refresh.ClientId,
-			Audience:  types.BuildAudiences(scopesBuilder.String()),
+			Audience:  jwt.BuildAudiences(scopesBuilder.String()),
 			IssuedAt:  currentTime.Unix(),
 			NotBefore: currentTime.Unix(),
 			Expires:   currentTime.Add(TokenDuration * time.Minute).Unix(),
@@ -225,7 +225,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		authz := &provider.S2sAuthorization{
 			Jti:          token.Claims.Jti,
 			ServiceName:  cmd.ServiceName,
-			ServiceToken: token.Token,
+			ServiceToken: token.Raw,
 			TokenExpires: data.CustomTime{
 				Time: time.Unix(token.Claims.Expires, 0),
 			},
