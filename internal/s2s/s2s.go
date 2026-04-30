@@ -80,7 +80,10 @@ func New(config config.Config) (S2s, error) {
 	}
 
 	// for blind index generation and lookups
-	dbIndexer := data.NewIndexer(dbHmacSecret)
+	dbIndexer, err := data.NewIndexer(dbHmacSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create db indexer: %v", err)
+	}
 
 	// field level encryption
 	aes, err := base64.StdEncoding.DecodeString(config.Database.FieldSecret)
@@ -88,7 +91,10 @@ func New(config config.Config) (S2s, error) {
 		return nil, fmt.Errorf("failed to decode field level encryption key: %v", err)
 	}
 
-	cryptor := data.NewServiceAesGcmKey(aes)
+	cryptor, err := data.NewServiceAesGcmKey(aes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create field level cryptor: %v", err)
+	}
 
 	// pat tokener
 	pepper, err := base64.StdEncoding.DecodeString(config.Pat.Pepper)
