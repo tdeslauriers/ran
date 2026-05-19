@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/connect/telemetry"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	exo "github.com/tdeslauriers/carapace/pkg/pat"
 	"github.com/tdeslauriers/ran/internal/definitions"
@@ -62,7 +63,7 @@ type handler struct {
 func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate the method is POST
@@ -145,7 +146,7 @@ func (h *handler) HandleGeneratePat(w http.ResponseWriter, r *http.Request) {
 func (h *handler) HandleIntrospectPat(w http.ResponseWriter, r *http.Request) {
 
 	// generate telemetry
-	tel := connect.NewTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate the method is POST

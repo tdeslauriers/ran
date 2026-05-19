@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/connect/telemetry"
 	"github.com/tdeslauriers/carapace/pkg/validate"
 	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/api/clients"
@@ -140,7 +140,7 @@ func (s *clientService) UpdateScopes(ctx context.Context, client *clients.Client
 	log := s.logger
 
 	// get telemetry from context
-	tel, ok := ctx.Value(connect.TelemetryKey).(*connect.Telemetry)
+	tel, ok := ctx.Value(telemetry.TelemetryKey).(*telemetry.Telemetry)
 	if ok && tel != nil {
 		log = log.With(tel.TelemetryFields()...)
 	} else {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/connect/telemetry"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/api/clients"
@@ -67,7 +68,7 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		// get telemetry from request
-		tel := connect.ObtainTelemetry(r, h.logger)
+		tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 		log := h.logger.With(tel.TelemetryFields()...)
 		log.Error(fmt.Sprintf("unsupported method %s for endpoint %s", r.Method, r.URL.Path))
 		e := connect.ErrorHttp{
@@ -83,7 +84,7 @@ func (h *clientHandler) HandleClients(w http.ResponseWriter, r *http.Request) {
 func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
@@ -147,7 +148,7 @@ func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request) {
 func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token
@@ -213,7 +214,7 @@ func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request) 
 func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token

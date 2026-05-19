@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/connect/telemetry"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/api/scopes"
@@ -83,7 +84,7 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 		slug := r.PathValue("slug")
 		if slug != "add" {
 			// get telemetry from request
-			tel := connect.ObtainTelemetry(r, h.logger)
+			tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 			log := h.logger.With(tel.TelemetryFields()...)
 
 			log.Error("only posts to /add are allowed")
@@ -99,7 +100,7 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		// get telemetry from request
-		tel := connect.ObtainTelemetry(r, h.logger)
+		tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 		log := h.logger.With(tel.TelemetryFields()...)
 
 		log.Error(fmt.Sprintf("unsupported method %s for endpoint %s", r.Method, r.URL.Path))
@@ -115,7 +116,7 @@ func (h *handler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 func (h *handler) getAllScopes(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
@@ -180,7 +181,7 @@ func (h *handler) getAllScopes(w http.ResponseWriter, r *http.Request) {
 func (h *handler) getActiveScopes(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// determine allowed scopes based on whether iamVerifier is nil --> service endpoint or user endpoint
@@ -245,7 +246,7 @@ func (h *handler) getActiveScopes(w http.ResponseWriter, r *http.Request) {
 func (h *handler) createScope(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token
@@ -320,7 +321,7 @@ func (h *handler) createScope(w http.ResponseWriter, r *http.Request) {
 func (h *handler) getScopeBySlug(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token
@@ -383,7 +384,7 @@ func (h *handler) getScopeBySlug(w http.ResponseWriter, r *http.Request) {
 func (h *handler) updateScope(w http.ResponseWriter, r *http.Request) {
 
 	// get telemetry from request
-	tel := connect.ObtainTelemetry(r, h.logger)
+	tel := telemetry.ObtainHttpTelemetry(r, h.logger)
 	log := h.logger.With(tel.TelemetryFields()...)
 
 	// validate s2s token

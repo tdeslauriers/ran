@@ -219,21 +219,18 @@ func (s *s2s) Run(ctx context.Context) error {
 	mux.HandleFunc("/generate/pat", patHandler.HandleGeneratePat)
 	mux.HandleFunc("/introspect", patHandler.HandleIntrospectPat)
 
-	s2sServer := &connect.TlsServer{
-		Addr:      s.config.ServicePort,
-		Mux:       mux,
-		TlsConfig: s.serverTls,
-	}
-
-	go func() {
-
-		s.logger.Info(fmt.Sprintf("starting %s s2s authentication service on %s...", s.config.ServiceName, s2sServer.Addr[1:]))
-		if err := s2sServer.Initialize(); err != http.ErrServerClosed {
-			s.logger.Error(fmt.Sprintf("failed to start %s s2s authenticaiton service: %v", s.config.ServiceName, err.Error()))
-		}
-	}()
+	s2sServer := connect.NewTlsServer(
+		s.config.ServicePort,
+		mux,
+		s.serverTls,
+	)
 
 	s.cleanup.ExpiredRefresh(ctx, 3) // 2am +- 30; refresh tokens live 3 hours
+
+	s.logger.Info(fmt.Sprintf("starting %s s2s authentication service on %s...", s.config.ServiceName, s.config.ServicePort[1:]))
+	if err := s2sServer.Initialize(ctx); err != nil && err != http.ErrServerClosed {
+		s.logger.Error(fmt.Sprintf("failed to start %s s2s authenticaiton service: %v", s.config.ServiceName, err.Error()))
+	}
 
 	return nil
 }

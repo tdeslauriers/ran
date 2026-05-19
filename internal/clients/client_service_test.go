@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/connect/telemetry"
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/ran/pkg/api/clients"
 	"github.com/tdeslauriers/ran/pkg/api/scopes"
@@ -643,8 +643,8 @@ func TestUpdateScopes(t *testing.T) {
 
 			// Create context with telemetry
 			ctx := context.Background()
-			tel := &connect.Telemetry{}
-			ctx = context.WithValue(ctx, connect.TelemetryKey, tel)
+			tel := &telemetry.Telemetry{}
+			ctx = context.WithValue(ctx, telemetry.TelemetryKey, tel)
 
 			// Call the service method
 			err := service.UpdateScopes(ctx, tt.client, tt.updated)

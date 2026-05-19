@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/tdeslauriers/carapace/pkg/connect"
+	"github.com/tdeslauriers/carapace/pkg/connect/telemetry"
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
@@ -140,9 +140,9 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 
 	log := s.logger
 
-	telemetry, ok := connect.GetTelemetryFromContext(ctx)
-	if ok && telemetry != nil {
-		log = log.With(telemetry.TelemetryFields()...)
+	tel, ok := ctx.Value(telemetry.TelemetryKey).(*telemetry.Telemetry)
+	if ok && tel != nil {
+		log = log.With(tel.TelemetryFields()...)
 	} else {
 		log.Warn("failed to extract context for GetRefreshToken")
 	}
