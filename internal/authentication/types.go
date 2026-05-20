@@ -10,8 +10,10 @@ const (
 	ErrEncryptRefresh     string = "failed to encrypt refresh token"
 	ErrEncryptServiceName string = "failed to encrypt service name"
 	ErrEncryptClientId    string = "failed to encrypt client id"
+	ErrEncryptClientName  string = "failed to encrypt client name"
 
 	ErrDecryptRefresh     string = "failed to decrypt refresh token"
 	ErrDecryptServiceName string = "failed to decrypt service name"
 	ErrDecryptClientId    string = "failed to decrypt client id"
+	ErrDecryptClientName  string = "failed to decrypt client name"
 )

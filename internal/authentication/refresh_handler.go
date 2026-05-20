@@ -163,7 +163,7 @@ func (h *s2sRefreshHandler) HandleS2sRefresh(w http.ResponseWriter, r *http.Requ
 		claims := jwt.Claims{
 			Jti:       jti.String(),
 			Issuer:    definitions.SericeName,
-			Subject:   refresh.ClientId,
+			Subject:   refresh.ClientName,
 			Audience:  jwt.BuildAudiences(scopesBuilder.String()),
 			IssuedAt:  currentTime.Unix(),
 			NotBefore: currentTime.Unix(),

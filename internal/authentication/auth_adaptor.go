@@ -128,6 +128,7 @@ func (r *authRepository) FindRefreshToken(index string) (*types.S2sRefresh, erro
 			refresh_token, 
 			client_uuid, 
 			client_index,
+			client_name,
 			created_at, 
 			revoked 
 		FROM refresh
@@ -154,10 +155,11 @@ func (r *authRepository) InsertRefreshToken(token types.S2sRefresh) error {
 			service_name, 
 			refresh_token, 
 			client_uuid, 
-			client_index, 
+			client_index,
+			client_name, 
 			created_at, 
 			revoked
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	if err := data.InsertRecord(r.sql, qry, token); err != nil {
 		return err
 	}

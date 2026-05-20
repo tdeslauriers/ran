@@ -387,7 +387,7 @@ func TestValidateCredentials(t *testing.T) {
 				credService: tc.setupCreds(),
 			}
 
-			err := service.ValidateCredentials(tc.clientId, tc.clientSecret)
+			_, err := service.ValidateCredentials(tc.clientId, tc.clientSecret)
 
 			if tc.expectError {
 				if err == nil {

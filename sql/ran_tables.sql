@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS refresh (
     refresh_token VARCHAR(128) NOT NULL,
     client_uuid VARCHAR(128) NOT NULL,
     client_index VARCHAR(128) NOT NULL,
+    client_name VARCHAR(128) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT UTC_TIMESTAMP,
     revoked BOOLEAN NOT NULL
 );

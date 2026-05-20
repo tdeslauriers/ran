@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/tdeslauriers/carapace/pkg/data"
 	"github.com/tdeslauriers/carapace/pkg/jwt"
 	"github.com/tdeslauriers/carapace/pkg/session/types"
+	"github.com/tdeslauriers/ran/internal/clients"
 	"github.com/tdeslauriers/ran/internal/definitions"
 	"github.com/tdeslauriers/ran/pkg/api/scopes"
 )
@@ -26,8 +26,8 @@ const (
 
 // AuthService is an interface for authentication services that validates credentials, gets scopes, and mints authorization tokens
 type AuthService interface {
-	// ValidateCredentials validates credentials provided by client, whether s2s or user
-	ValidateCredentials(id, secret string) error
+	// ValidateCredentials validates credentials provided by client, returning the client account if valid.
+	ValidateCredentials(id, secret string) (*clients.ClientAccount, error)
 
 	// GetScopes gets scopes specific to a service for a given identifier.
 	// 'user' parameter can be a username or a client id.
@@ -74,36 +74,45 @@ type s2sAuthService struct {
 	logger *slog.Logger
 }
 
-// ValidateCredentials checks the provided client ID and secret against the database.
-func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) error {
+// ValidateCredentials checks the provided client ID and secret against the database, returning the client account if valid.
+func (s *s2sAuthService) ValidateCredentials(clientId, clientSecret string) (*clients.ClientAccount, error) {
 
 	// get record from the database if exists
-	c, err := s.sql.FindClientById(clientId)
+	record, err := s.sql.FindClientById(clientId)
 	if err != nil {
-		return err
-	}
-
-	// check if client is enabled
-	if !c.Enabled {
-		return fmt.Errorf("s2s client with id %s is not enabled", clientId)
-	}
-
-	// check if account is locked
-	if c.AccountLocked {
-		return fmt.Errorf("s2s client with id %s is locked", clientId)
-	}
-
-	// check if account is expired
-	if c.AccountExpired {
-		return fmt.Errorf("s2s client with id %s has expired", clientId)
+		return nil, err
 	}
 
 	// validate password
-	if err := s.credService.CompareHashAndPassword(c.Password, clientSecret); err != nil {
-		return fmt.Errorf("failed to validate credentials for s2s client id %s: %v", clientId, err)
+	if err := s.credService.CompareHashAndPassword(record.Password, clientSecret); err != nil {
+		return nil, fmt.Errorf("failed to validate credentials for s2s client id %s: %v", clientId, err)
 	}
 
-	return nil
+	// check if client is enabled
+	if !record.Enabled {
+		return nil, fmt.Errorf("s2s client with id %s is not enabled", clientId)
+	}
+
+	// check if account is locked
+	if record.AccountLocked {
+		return nil, fmt.Errorf("s2s client with id %s is locked", clientId)
+	}
+
+	// check if account is expired
+	if record.AccountExpired {
+		return nil, fmt.Errorf("s2s client with id %s has expired", clientId)
+	}
+
+	return &clients.ClientAccount{
+		Id:             record.Id,
+		Name:           record.Name,
+		Owner:          record.Owner,
+		CreatedAt:      record.CreatedAt,
+		Enabled:        record.Enabled,
+		AccountExpired: record.AccountExpired,
+		AccountLocked:  record.AccountLocked,
+		Slug:           record.Slug,
+	}, nil
 }
 
 // GetScopes gets scopes specific to a service for a given client id.
@@ -187,52 +196,67 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 	}
 
 	var (
-		wgDecrypt        sync.WaitGroup
-		decryptedService string
-		decryptedRefresh string
-		decryptedClient  string
+		wgDecrypt           sync.WaitGroup
+		decryptedServiceCh  = make(chan string, 1)
+		decryptedRefreshCh  = make(chan string, 1)
+		decryptedClientIdCh = make(chan string, 1)
+		decryptedClientName = make(chan string, 1)
+		errChan             = make(chan error, 4)
 	)
-	errChan := make(chan error, 3)
 
 	// decrypt service name
 	wgDecrypt.Add(1)
-	go func(service string, decryptedService *string, ch chan error, wg *sync.WaitGroup) {
+	go func(service string, decryptedServiceCh chan string, errCh chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		decrypted, err := s.cryptor.DecryptServiceData(service)
 		if err != nil {
-			ch <- fmt.Errorf("failed to decrypt service name %s for refresh token xxxxxx-%s: %v", service, refreshToken[len(refreshToken)-6:], err)
+			errCh <- fmt.Errorf("failed to decrypt service name %s for refresh token xxxxxx-%s: %v", service, refreshToken[len(refreshToken)-6:], err)
 			return
 		}
-		*decryptedService = string(decrypted)
-	}(refresh.ServiceName, &decryptedService, errChan, &wgDecrypt)
+		decryptedServiceCh <- string(decrypted)
+	}(refresh.ServiceName, decryptedServiceCh, errChan, &wgDecrypt)
 
 	// decrypt refresh token
 	wgDecrypt.Add(1)
-	go func(refresh string, decryptedRefresh *string, ch chan error, wg *sync.WaitGroup) {
+	go func(refresh string, decryptedRefresh chan string, errCh chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		decrypted, err := s.cryptor.DecryptServiceData(refresh)
 		if err != nil {
-			ch <- fmt.Errorf("failed to decrypt refresh token xxxxxx-%s: %v", refresh[len(refresh)-6:], err)
+			errCh <- fmt.Errorf("failed to decrypt refresh token xxxxxx-%s: %v", refresh[len(refresh)-6:], err)
 			return
 		}
-		*decryptedRefresh = string(decrypted)
-	}(refresh.RefreshToken, &decryptedRefresh, errChan, &wgDecrypt)
+		decryptedRefresh <- string(decrypted)
+	}(refresh.RefreshToken, decryptedRefreshCh, errChan, &wgDecrypt)
 
 	// decrypt client id
 	wgDecrypt.Add(1)
-	go func(client string, decryptedClient *string, ch chan error, wg *sync.WaitGroup) {
+	go func(client string, decryptedClientIdCh chan string, errCh chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		decrypted, err := s.cryptor.DecryptServiceData(client)
 		if err != nil {
-			ch <- fmt.Errorf("failed to decrypt client id %s for refresh token xxxxxx-%s: %v",
+			errCh <- fmt.Errorf("failed to decrypt client id %s for refresh token xxxxxx-%s: %v",
 				client, refreshToken[len(refreshToken)-6:], err)
 			return
 		}
-		*decryptedClient = (string(decrypted))
-	}(refresh.ClientId, &decryptedClient, errChan, &wgDecrypt)
+		decryptedClientIdCh <- string(decrypted)
+	}(refresh.ClientId, decryptedClientIdCh, errChan, &wgDecrypt)
+
+	// decrypt client name
+	wgDecrypt.Add(1)
+	go func(clientName string, decryptedClientName chan string, errCh chan error, wg *sync.WaitGroup) {
+		defer wg.Done()
+
+		decrypted, err := s.cryptor.DecryptServiceData(clientName)
+		if err != nil {
+			errCh <- fmt.Errorf("failed to decrypt client name for refresh token xxxxxx-%s: %v",
+				refreshToken[len(refreshToken)-6:], err)
+			return
+		}
+		decryptedClientName <- string(decrypted)
+	}(refresh.ClientName, decryptedClientName, errChan, &wgDecrypt)
 
 	// wait for all decryption go routines to finish
 	wgDecrypt.Wait()
@@ -244,14 +268,34 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 		for e := range errChan {
 			errs = append(errs, e)
 		}
-		return nil, fmt.Errorf("errors occurred during decryption of refresh token xxxxxx-%s: %s",
+		return nil, fmt.Errorf("failed to decrypt refresh token xxxxxx-%s: %s",
 			refreshToken[len(refreshToken)-6:], errors.Join(errs...))
 	}
 
 	// update refresh struct with decrypted values
-	refresh.ServiceName = decryptedService
-	refresh.RefreshToken = decryptedRefresh
-	refresh.ClientId = decryptedClient
+	refreshSvc, ok := <-decryptedServiceCh
+	if !ok {
+		return nil, fmt.Errorf("failed to decrypt service name for refresh token xxxxxx-%s", refreshToken[len(refreshToken)-6:])
+	}
+	refresh.ServiceName = refreshSvc
+
+	tkn, ok := <-decryptedRefreshCh
+	if !ok {
+		return nil, fmt.Errorf("failed to decrypt refresh token xxxxxx-%s", refreshToken[len(refreshToken)-6:])
+	}
+	refresh.RefreshToken = tkn
+
+	cId, ok := <-decryptedClientIdCh
+	if !ok {
+		return nil, fmt.Errorf("failed to decrypt client id for refresh token xxxxxx-%s", refreshToken[len(refreshToken)-6:])
+	}
+	refresh.ClientId = cId
+
+	cName, ok := <-decryptedClientName
+	if !ok {
+		return nil, fmt.Errorf("failed to decrypt client name for refresh token xxxxxx-%s", refreshToken[len(refreshToken)-6:])
+	}
+	refresh.ClientName = cName
 
 	return refresh, nil
 }
@@ -261,84 +305,85 @@ func (s *s2sAuthService) GetRefreshToken(ctx context.Context, refreshToken strin
 func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 	var (
-		wgRecord         sync.WaitGroup
-		id               uuid.UUID
-		index            string
-		encryptedService string
-		encryptedRefresh string
-		encryptedClient  string
-		clientIndex      string
+		wgRecord              sync.WaitGroup
+		uuidCh                = make(chan uuid.UUID, 1)
+		refreshIndexCh        = make(chan string, 1)
+		encryptedServiceCh    = make(chan string, 1)
+		encryptedRefreshCh    = make(chan string, 1)
+		encryptedClientIdCh   = make(chan string, 1)
+		clientIndexCh         = make(chan string, 1)
+		encryptedClientNameCh = make(chan string, 1)
+		errChan               = make(chan error, 7)
 	)
-	errChan := make(chan error, 6)
 
 	// create primary key uuid for db record
 	wgRecord.Add(1)
-	go func(id *uuid.UUID, ch chan error, wg *sync.WaitGroup) {
+	go func(uuidCh chan uuid.UUID, errCh chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		i, err := uuid.NewRandom()
 		if err != nil {
-			ch <- fmt.Errorf("failed to create refresh token db record primary key/uuid: %v", err)
+			errCh <- fmt.Errorf("failed to create refresh token db record primary key/uuid: %v", err)
 			return
 		}
-		*id = i
-	}(&id, errChan, &wgRecord)
+		uuidCh <- i
+	}(uuidCh, errChan, &wgRecord)
 
 	// create blind index for db record
 	wgRecord.Add(1)
-	go func(refresh string, index *string, ch chan error, wg *sync.WaitGroup) {
+	go func(refresh string, refreshIndexCh chan string, errCh chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		ndx, err := s.indexer.ObtainBlindIndex(refresh)
 		if err != nil {
-			ch <- fmt.Errorf("%s for refresh token xxxxxx-%s: %v", ErrGenIndex, refresh[len(refresh)-6:], err)
+			errCh <- fmt.Errorf("%s for refresh token xxxxxx-%s: %v", ErrGenIndex, refresh[len(refresh)-6:], err)
 			return
 		}
-		*index = ndx
-	}(r.RefreshToken, &index, errChan, &wgRecord)
+		refreshIndexCh <- ndx
+	}(r.RefreshToken, refreshIndexCh, errChan, &wgRecord)
 
 	// encrypt service name for db record
 	wgRecord.Add(1)
-	go func(service string, encryptedService *string, ch chan error, wg *sync.WaitGroup) {
+	go func(service string, encryptedServiceCh chan string, errch chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		encrypted, err := s.cryptor.EncryptServiceData([]byte(service))
 		if err != nil {
-			ch <- fmt.Errorf("%s %s for db record: %v", ErrEncryptServiceName, service, err)
+			errch <- fmt.Errorf("%s %s for db record: %v", ErrEncryptServiceName, service, err)
 			return
 		}
-		*encryptedService = encrypted
-	}(r.ServiceName, &encryptedService, errChan, &wgRecord)
+		encryptedServiceCh <- encrypted
+	}(r.ServiceName, encryptedServiceCh, errChan, &wgRecord)
 
 	// encrypt refresh token for db record
 	wgRecord.Add(1)
-	go func(refresh string, encryptedRefresh *string, ch chan error, wg *sync.WaitGroup) {
+	go func(refresh string, encryptedRefreshCh chan string, errCh chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		encrypted, err := s.cryptor.EncryptServiceData([]byte(refresh))
 		if err != nil {
-			ch <- fmt.Errorf("%s xxxxxx-%s for db record: %v", ErrEncryptRefresh, refresh[len(refresh)-6:], err)
+			errCh <- fmt.Errorf("%s xxxxxx-%s for db record: %v", ErrEncryptRefresh, refresh[len(refresh)-6:], err)
 			return
 		}
-		*encryptedRefresh = encrypted
-	}(r.RefreshToken, &encryptedRefresh, errChan, &wgRecord)
+		encryptedRefreshCh <- encrypted
+	}(r.RefreshToken, encryptedRefreshCh, errChan, &wgRecord)
 
 	// encrypt client id for db record
 	wgRecord.Add(1)
-	go func(client string, encryptedClient *string, ch chan error, wg *sync.WaitGroup) {
+	go func(clientId string, encryptedClientIdCh chan string, errCh chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		encrypted, err := s.cryptor.EncryptServiceData([]byte(client))
+		encrypted, err := s.cryptor.EncryptServiceData([]byte(clientId))
 		if err != nil {
-			ch <- fmt.Errorf("%s %s for db record: %v", ErrEncryptClientId, client, err)
+			errCh <- fmt.Errorf("%s %s for db record: %v", ErrEncryptClientId, clientId, err)
 			return
 		}
-		*encryptedClient = encrypted
-	}(r.ClientId, &encryptedClient, errChan, &wgRecord)
+		encryptedClientIdCh <- encrypted
+	}(r.ClientId, encryptedClientIdCh, errChan, &wgRecord)
 
 	// create client id blind index for db record
 	wgRecord.Add(1)
-	go func(client string, index *string, ch chan error, wg *sync.WaitGroup) {
+	go func(client string, clientIndexCh chan string, ch chan error, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		i, err := s.indexer.ObtainBlindIndex(client)
@@ -346,8 +391,21 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 			ch <- fmt.Errorf("failed to generate blind index for client id %s: %v", client, err)
 			return
 		}
-		*index = i
-	}(r.ClientId, &clientIndex, errChan, &wgRecord)
+		clientIndexCh <- i
+	}(r.ClientId, clientIndexCh, errChan, &wgRecord)
+
+	// encrypt client name for db record
+	wgRecord.Add(1)
+	go func(clientName string, encryptedClientNameCh chan string, errCh chan error, wg *sync.WaitGroup) {
+		defer wg.Done()
+
+		encrypted, err := s.cryptor.EncryptServiceData([]byte(clientName))
+		if err != nil {
+			errCh <- fmt.Errorf("%s %s for db record: %v", ErrEncryptClientName, clientName, err)
+			return
+		}
+		encryptedClientNameCh <- encrypted
+	}(r.ClientName, encryptedClientNameCh, errChan, &wgRecord)
 
 	// wait for all record creation go routines to finish
 	wgRecord.Wait()
@@ -355,25 +413,56 @@ func (s *s2sAuthService) PersistRefresh(r types.S2sRefresh) error {
 
 	// check for errors and consolidate
 	if len(errChan) > 0 {
-		var builder strings.Builder
-		count := 0
+		var errs []error
 		for e := range errChan {
-			builder.WriteString(e.Error())
-			if count < len(errChan)-1 {
-				builder.WriteString("; ")
-			}
-			count++
+			errs = append(errs, e)
 		}
-		return errors.New(builder.String())
+		return fmt.Errorf("failed to encrypt refresh token db record for client id %s: %s", r.ClientId, errors.Join(errs...))
 	}
 
-	// update refresh struct with new values
+	// set the values if they are not empty
+	// these should never be empty since errors are checked above -> good practice
+	id, ok := <-uuidCh
+	if !ok {
+		return fmt.Errorf("failed to generate primary key for refresh token db record for client id %s", r.ClientId)
+	}
 	r.Uuid = id.String()
-	r.RefreshIndex = index
-	r.ServiceName = encryptedService
-	r.RefreshToken = encryptedRefresh
-	r.ClientId = encryptedClient
-	r.ClientIndex = clientIndex
+
+	rIdx, ok := <-refreshIndexCh
+	if !ok {
+		return fmt.Errorf("failed to generate blind index for refresh token db record for client id %s", r.ClientId)
+	}
+	r.RefreshIndex = rIdx
+
+	svc, ok := <-encryptedServiceCh
+	if !ok {
+		return fmt.Errorf("failed to encrypt service name for refresh token db record for client id %s", r.ClientId)
+	}
+	r.ServiceName = svc
+
+	rsh, ok := <-encryptedRefreshCh
+	if !ok {
+		return fmt.Errorf("failed to encrypt refresh token for refresh token db record for client id %s", r.ClientId)
+	}
+	r.RefreshToken = rsh
+
+	cId, ok := <-encryptedClientIdCh
+	if !ok {
+		return fmt.Errorf("failed to encrypt client id for refresh token db record for client id %s", r.ClientId)
+	}
+	r.ClientId = cId
+
+	cIdx, ok := <-clientIndexCh
+	if !ok {
+		return fmt.Errorf("failed to generate client id blind index for refresh token db record for client id %s", r.ClientId)
+	}
+	r.ClientIndex = cIdx
+
+	cName, ok := <-encryptedClientNameCh
+	if !ok {
+		return fmt.Errorf("failed to encrypt client name for refresh token db record for client id %s", r.ClientId)
+	}
+	r.ClientName = cName
 
 	// persist refresh token to db
 	if err := s.sql.InsertRefreshToken(r); err != nil {

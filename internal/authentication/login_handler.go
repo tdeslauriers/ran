@@ -92,7 +92,8 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	}
 
 	// validate creds
-	if err := h.authService.ValidateCredentials(cmd.ClientId, cmd.ClientSecret); err != nil {
+	client, err := h.authService.ValidateCredentials(cmd.ClientId, cmd.ClientSecret)
+	if err != nil {
 		log.Error(fmt.Sprintf("failed to validate s2s login credentials for client id %s", cmd.ClientId), "err", err.Error())
 		e := connect.ErrorHttp{
 			StatusCode: http.StatusUnauthorized,
@@ -147,7 +148,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 	claims := jwt.Claims{
 		Jti:       jti.String(),
 		Issuer:    definitions.SericeName,
-		Subject:   cmd.ClientId,
+		Subject:   client.Name,
 		Audience:  jwt.BuildAudiences(scopesBuilder.String()),
 		IssuedAt:  currentTime.Unix(),
 		NotBefore: currentTime.Unix(),
@@ -184,6 +185,7 @@ func (h *s2sLoginHandler) HandleS2sLogin(w http.ResponseWriter, r *http.Request)
 		ServiceName:  cmd.ServiceName,
 		RefreshToken: refreshToken.String(),
 		ClientId:     cmd.ClientId,
+		ClientName:   client.Name,
 		CreatedAt:    data.CustomTime{Time: time.Unix(token.Claims.IssuedAt, 0)},
 		Revoked:      false,
 	}
