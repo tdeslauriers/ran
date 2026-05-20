@@ -162,8 +162,8 @@ func (h *handler) getAllScopes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info(fmt.Sprintf("successfully retrieved %d scopes", len(scopes)),
-		slog.String("requesting_service", authorizedSvc.Claims.Subject),
-		slog.String("actor", authorized.Claims.Subject))
+		slog.String("principal_service", authorizedSvc.Claims.Subject),
+		slog.String("principal_user", authorized.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(scopes); err != nil {
@@ -227,8 +227,8 @@ func (h *handler) getActiveScopes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info(fmt.Sprintf("successfully retrieved %d active scopes", len(scopes)),
-		slog.String("requesting_service", authorizedSvc.Claims.Subject),
-		slog.String("actor", authorized.Claims.Subject))
+		slog.String("principal_service", authorizedSvc.Claims.Subject),
+		slog.String("principal_user", authorized.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(scopes); err != nil {
@@ -299,8 +299,8 @@ func (h *handler) createScope(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info(fmt.Sprintf("successfully added scope %s", scope.Name),
-		slog.String("requesting_service", authorizedSvc.Claims.Subject),
-		slog.String("actor", authorized.Claims.Subject))
+		slog.String("principal_service", authorizedSvc.Claims.Subject),
+		slog.String("principal_user", authorized.Claims.Subject))
 
 	// respond 201
 	w.Header().Set("Content-Type", "application/json")
@@ -363,8 +363,8 @@ func (h *handler) getScopeBySlug(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info(fmt.Sprintf("successfully retrieved scope %s", scope.Name),
-		slog.String("requesting_service", authorizedSvc.Claims.Subject),
-		slog.String("actor", authorized.Claims.Subject))
+		slog.String("principal_service", authorizedSvc.Claims.Subject),
+		slog.String("principal_user", authorized.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(scope)
@@ -504,8 +504,8 @@ func (h *handler) updateScope(w http.ResponseWriter, r *http.Request) {
 	if len(updatedFields) > 0 {
 		log = log.With(updatedFields...)
 		log.Info(fmt.Sprintf("successfully updated scope - slug %s", record.Slug),
-			slog.String("requesting_service", authorizedSvc.Claims.Subject),
-			slog.String("actor", authorized.Claims.Subject))
+			slog.String("principal_service", authorizedSvc.Claims.Subject),
+			slog.String("principal_user", authorized.Claims.Subject))
 	}
 
 	// respond with updated scope

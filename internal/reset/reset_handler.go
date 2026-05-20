@@ -114,8 +114,8 @@ func (h *resetHandler) HandleReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info(fmt.Sprintf("successfully reset password for service client %s", cmd.ResourceId),
-		slog.String("requesting_service", authorizedSvc.Claims.Subject),
-		slog.String("actor", authorized.Claims.Subject))
+		slog.String("principal_service", authorizedSvc.Claims.Subject),
+		slog.String("principal_user", authorized.Claims.Subject))
 
 	// respond with success
 	w.WriteHeader(http.StatusNoContent)

@@ -150,7 +150,7 @@ func (h *registrationHandler) HandleRegistration(w http.ResponseWriter, r *http.
 	}
 
 	h.logger.Info(fmt.Sprintf("client %s registered successfully", client.Name),
-		slog.String("actor", authroized.Claims.Subject),
+		slog.String("principal_user", authroized.Claims.Subject),
 		slog.String("client_id", client.Id))
 
 	// respond with client

@@ -175,7 +175,7 @@ func (h *scopesHandler) HandleScopes(w http.ResponseWriter, r *http.Request) {
 
 	// log success
 	h.logger.Info(fmt.Sprintf("service client %s's assigned scopes were updated successfully", client.Name),
-		slog.String("actor", authorized.Claims.Subject))
+		slog.String("principal_user", authorized.Claims.Subject))
 
 	// respond 204
 	w.WriteHeader(http.StatusNoContent)

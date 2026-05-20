@@ -129,8 +129,8 @@ func (h *clientHandler) getAllClients(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info(fmt.Sprintf("successfully retrieved %d clients", len(clients)),
-		slog.String("requesting_service", authorizedService.Claims.Subject),
-		slog.String("actor", authorizedUser.Claims.Subject))
+		slog.String("principal_service", authorizedService.Claims.Subject),
+		slog.String("principal_user", authorizedUser.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(clients); err != nil {
@@ -195,8 +195,8 @@ func (h *clientHandler) getClientBySlug(w http.ResponseWriter, r *http.Request) 
 	}
 
 	log.Info(fmt.Sprintf("successfully retrieved client %s - slug %s", client.Name, slug),
-		slog.String("requesting_service", authorizedSvc.Claims.Subject),
-		slog.String("actor", authorizedUser.Claims.Subject))
+		slog.String("principal_service", authorizedSvc.Claims.Subject),
+		slog.String("principal_user", authorizedUser.Claims.Subject))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err = json.NewEncoder(w).Encode(client); err != nil {
@@ -343,12 +343,12 @@ func (h *clientHandler) updateClient(w http.ResponseWriter, r *http.Request) {
 	if len(updatedFields) > 0 {
 		log = log.With(updatedFields...)
 		log.Info(fmt.Sprintf("successfully updated client %s - slug %s", updated.Name, updated.Slug),
-			slog.String("requesting_service", authorizedSvc.Claims.Subject),
-			slog.String("actor", authorizedUser.Claims.Subject))
+			slog.String("principal_service", authorizedSvc.Claims.Subject),
+			slog.String("principal_user", authorizedUser.Claims.Subject))
 	} else {
 		log.Warn(fmt.Sprintf("updated executed, but no fields changed for client %s - slug %s", updated.Name, updated.Slug),
-			slog.String("requesting_service", authorizedSvc.Claims.Subject),
-			slog.String("actor", authorizedUser.Claims.Subject))
+			slog.String("principal_service", authorizedSvc.Claims.Subject),
+			slog.String("principal_user", authorizedUser.Claims.Subject))
 	}
 
 	// respond with updated client
